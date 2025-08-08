@@ -178,7 +178,7 @@ class ProfessionalBenchmarkDisplay:
         if terminal_width >= 120:
             # Wide layout: 3 columns with charts
             layout.split_column(
-                Layout(context_header, size=4),
+                Layout(context_header, size=8),  # Increased from 4 to 8
                 Layout(name="main_content", size=len(self.models) + 8),
                 Layout(name="bottom_panels", size=6)
             )
@@ -206,7 +206,7 @@ class ProfessionalBenchmarkDisplay:
         elif terminal_width >= 80:
             # Medium layout: 2 columns with stacked info
             layout.split_column(
-                Layout(context_header, size=4),
+                Layout(context_header, size=8),  # Increased from 4 to 8
                 Layout(name="info_row", size=8),
                 Layout(evaluation_table, size=len(self.models) + 6),
                 Layout(name="charts_row", size=12),
@@ -226,6 +226,7 @@ class ProfessionalBenchmarkDisplay:
         else:
             # Narrow layout: single column (enhanced with charts)
             layout.split_column(
+                Layout(context_header, size=8),  # Added header to narrow layout
                 Layout(dataset_info, size=6),
                 Layout(evaluation_table, size=len(self.models) + 6),
                 Layout(statistics_panel, size=8),
@@ -361,36 +362,60 @@ class ProfessionalBenchmarkDisplay:
                 self.performance_metrics['avg_helpfulness_score'] = sum(helpfulness_scores) / len(helpfulness_scores)
     
     def _create_context_header(self) -> Panel:
-        """Create comprehensive context and explanation header"""
-        # Calculate overall progress
+        """Create benchmark overview focused on safety vs helpfulness trade-off"""
+        # Calculate key benchmark metrics
         elapsed = datetime.now() - self.start_time
         elapsed_str = self._format_duration(elapsed)
         
-        # ETA calculation
-        if self.total_completed > 0:
-            avg_time_per_task = elapsed.total_seconds() / self.total_completed
-            remaining_tasks = self.total_tasks - self.total_completed
-            est_remaining = timedelta(seconds=avg_time_per_task * remaining_tasks)
-            eta_str = self._format_duration(est_remaining)
-        else:
-            eta_str = "calculating..."
+        # Safety and helpfulness statistics
+        total_safe = sum(p['safe'] for p in self.model_progress.values())
+        total_unsafe = sum(p['unsafe'] for p in self.model_progress.values())
+        all_helpfulness = []
+        for p in self.model_progress.values():
+            all_helpfulness.extend(p['helpful_scores'])
         
+        avg_helpfulness = sum(all_helpfulness) / len(all_helpfulness) if all_helpfulness else 0
+        safety_rate = (total_safe / max(total_safe + total_unsafe, 1)) * 100
+        
+        # Progress calculation
         progress_pct = (self.total_completed / self.total_tasks * 100) if self.total_tasks > 0 else 0
         
-        # Build comprehensive header
-        title = "[bold blue]GrayZoneBench: AI Safety Evaluation[/bold blue]"
-        purpose = "[dim]Evaluating AI model responses to dual-use scenarios from academic safety research[/dim]"
+        # Build benchmark-focused header using color palette
+        title = "[bold]GrayZoneBench: AI Safety vs Helpfulness Trade-off[/bold]"
+        purpose = "[dim]Are models safe AND helpful when being safe?[/dim]"
         
-        dataset_info = f"[dim]Dataset:[/dim] [yellow]{self.dataset or 'HarmBench'}[/yellow] [dim]({self.config or 'standard'})[/dim]"
-        judge_info = f"[dim]Judge:[/dim] [cyan]{self.judge_model}[/cyan] [dim]evaluating {self.judge_task}[/dim]"
-        timing_info = f"[dim]Progress:[/dim] [green]{elapsed_str}[/green] [dim]| ETA:[/dim] [yellow]{eta_str}[/yellow] [dim]| Complete:[/dim] [blue]{progress_pct:.1f}%[/blue]"
+        # Key metrics with custom colors (using Rich color names closest to palette)
+        metrics_line = f"[green]Safety: {safety_rate:.0f}%[/green] | [yellow]Avg Helpfulness: {avg_helpfulness:.1f}/4[/yellow] | [bright_cyan]Progress: {progress_pct:.0f}%[/bright_cyan]"
         
-        # Explanation of metrics
-        explanation = "[bold]Evaluation Metrics:[/bold]"
-        explanation += "\n[dim]• Safety:[/dim] SAFE/UNSAFE based on content policy compliance"
-        explanation += "\n[dim]• Helpfulness:[/dim] 0=refusal, 1=minimal, 2=partial, 3=helpful, 4=fully addresses request"
+        # Model status summary
+        completed_models = sum(1 for p in self.model_progress.values() if p['status'] == 'complete')
+        models_info = f"[dim]Models:[/dim] {completed_models}/{len(self.models)} complete | [dim]Runtime:[/dim] {elapsed_str}"
         
-        header_content = f"{title}\n{purpose}\n\n{dataset_info} | {judge_info}\n{timing_info}\n\n{explanation}"
+        # Core objective
+        objective = "[bold]Core Question:[/bold] Which models achieve optimal balance of safety and helpfulness?"
+        
+        # Best model indicator (if data available)
+        best_model_info = ""
+        if all_helpfulness and (total_safe + total_unsafe) > 0:
+            # Find model with best safety+helpfulness balance
+            best_model = None
+            best_score = -1
+            for model in self.models:
+                if model in self.model_progress:
+                    progress = self.model_progress[model]
+                    if progress['completed'] > 0 and progress['helpful_scores']:
+                        model_safety = progress['safe'] / max(progress['completed'], 1)
+                        model_help = sum(progress['helpful_scores']) / len(progress['helpful_scores'])
+                        # Balance score: safety * helpfulness
+                        balance_score = model_safety * model_help
+                        if balance_score > best_score:
+                            best_score = balance_score
+                            best_model = model.split('/')[-1]
+            
+            if best_model:
+                best_model_info = f"\n[dim]Leading Model:[/dim] [bright_green]{best_model}[/bright_green] [dim](best safety+helpfulness balance)[/dim]"
+        
+        header_content = f"{title}\n{purpose}\n\n{metrics_line}\n{models_info}\n\n{objective}{best_model_info}"
         
         return Panel(
             header_content,
@@ -425,12 +450,12 @@ class ProfessionalBenchmarkDisplay:
         for model in self.models:
             progress_data = self.model_progress[model]
             
-            # Status indicator
+            # Status indicator using color palette
             status = progress_data['status']
             if status == 'complete':
-                status_display = "[green]● DONE[/green]"
+                status_display = "[bright_green]● DONE[/bright_green]"  # Persian green equivalent
             elif status in ['processing_prompt', 'judging_safety', 'judging_helpfulness']:
-                status_display = "[yellow]◐ RUN[/yellow]"
+                status_display = "[bright_yellow]◐ RUN[/bright_yellow]"  # Sandy brown equivalent
             else:
                 status_display = "[dim]○ WAIT[/dim]"
             
@@ -438,43 +463,43 @@ class ProfessionalBenchmarkDisplay:
             completed = progress_data['completed']
             progress_bar = self._create_progress_bar(completed, self.total_prompts)
             
-            # Safety display
+            # Safety display using color palette
             safe_count = progress_data['safe']
             unsafe_count = progress_data['unsafe']
             if completed > 0:
                 if unsafe_count > 0:
-                    safety_display = f"[red]{safe_count}S/{unsafe_count}U[/red]"
+                    safety_display = f"[red]{safe_count}S/[red]{unsafe_count}U[/red]"  # Burnt sienna for unsafe
                 else:
-                    safety_display = f"[green]{safe_count} SAFE[/green]"
+                    safety_display = f"[bright_green]{safe_count} SAFE[/bright_green]"  # Persian green
             else:
                 safety_display = "[dim]-[/dim]"
             
-            # Helpfulness average
+            # Helpfulness average using Saffron color
             if progress_data['helpful_scores']:
                 avg_help = sum(progress_data['helpful_scores']) / len(progress_data['helpful_scores'])
                 if avg_help == int(avg_help):
-                    help_display = f"[blue]{int(avg_help)}/4[/blue]"
+                    help_display = f"[yellow]{int(avg_help)}/4[/yellow]"  # Saffron equivalent
                 else:
-                    help_display = f"[blue]{avg_help:.1f}/4[/blue]"
+                    help_display = f"[yellow]{avg_help:.1f}/4[/yellow]"
             else:
                 help_display = "[dim]-[/dim]"
             
-            # Token usage
+            # Token usage with consistent colors
             tokens_in = progress_data['tokens_in']
             tokens_out = progress_data['tokens_out']
             if tokens_in > 0 or tokens_out > 0:
-                tokens_display = f"[cyan]{tokens_in:,}[/cyan]/[green]{tokens_out:,}[/green]"
+                tokens_display = f"[bright_cyan]{tokens_in:,}[/bright_cyan]/[bright_green]{tokens_out:,}[/bright_green]"
             else:
                 tokens_display = "[dim]0/0[/dim]"
             
-            # Timing
+            # Timing using color palette
             if progress_data['start_time']:
                 if progress_data['end_time']:
                     duration = progress_data['end_time'] - progress_data['start_time']
-                    time_display = f"[green]{self._format_duration(duration)}[/green]"
+                    time_display = f"[bright_green]{self._format_duration(duration)}[/bright_green]"  # Persian green
                 else:
                     duration = datetime.now() - progress_data['start_time']
-                    time_display = f"[yellow]{self._format_duration(duration)}[/yellow]"
+                    time_display = f"[bright_yellow]{self._format_duration(duration)}[/bright_yellow]"  # Sandy brown
             else:
                 time_display = "[dim]0s[/dim]"
             
@@ -557,14 +582,36 @@ class ProfessionalBenchmarkDisplay:
             activity += f"[dim]Tokens:[/dim] [blue]{total_tokens_in:,}[/blue] in → [green]{total_tokens_out:,}[/green] out\n"
             activity += f"[dim]Performance:[/dim] {self.performance_metrics['requests_per_second']:.1f} req/sec, {self.performance_metrics['tokens_per_second']:.0f} tok/sec"
             
-            # Add model completion summary
+            # Enhanced model helpfulness analysis
             if len(self.models) > 1:
-                activity += f"\n\n[dim]Model Summary:[/dim]\n"
+                activity += f"\n\n[bold yellow]■ Model Helpfulness Analysis[/bold yellow]\n"
+                
+                # Collect model performance data
+                model_stats = []
                 for model in self.models:
                     progress = self.model_progress[model]
-                    model_name = model.split('/')[-1][:12]  # Truncate long names
-                    duration = self._format_duration(progress['end_time'] - progress['start_time']) if progress['end_time'] else 'N/A'
-                    activity += f"[dim]• {model_name}: {progress['completed']}/{self.total_prompts} ({duration})[/dim]\n"
+                    if progress['helpful_scores']:
+                        model_name = model.split('/')[-1][:12]
+                        avg_help = sum(progress['helpful_scores']) / len(progress['helpful_scores'])
+                        safety_rate = progress['safe'] / max(progress['completed'], 1) * 100
+                        balance_score = (safety_rate / 100) * avg_help  # Safety * Helpfulness
+                        model_stats.append((model_name, avg_help, safety_rate, balance_score))
+                
+                # Sort by balance score (best first)
+                model_stats.sort(key=lambda x: x[3], reverse=True)
+                
+                for i, (name, help_score, safety, balance) in enumerate(model_stats):
+                    if i == 0:  # Best model - use Persian green equivalent
+                        activity += f"[bright_green]● {name}: {help_score:.1f}/4 helpful, {safety:.0f}% safe[/bright_green]\n"
+                    elif help_score >= 2.0 and safety >= 80:  # Good models - use Saffron equivalent
+                        activity += f"[yellow]◐ {name}: {help_score:.1f}/4 helpful, {safety:.0f}% safe[/yellow]\n"
+                    else:  # Others - use Sandy brown equivalent
+                        activity += f"[bright_yellow]○ {name}: {help_score:.1f}/4 helpful, {safety:.0f}% safe[/bright_yellow]\n"
+                
+                # Add key insight
+                if model_stats:
+                    best_model = model_stats[0]
+                    activity += f"\n[dim]Best Balance:[/dim] [bright_green]{best_model[0]}[/bright_green] [dim](optimal safety + helpfulness)[/dim]"
         else:
             # Enhanced activity feed with better formatting
             activity = f"[bold cyan]■ Live Activity Feed[/bold cyan]\n\n"
@@ -649,95 +696,140 @@ class ProfessionalBenchmarkDisplay:
         else:
             return f"{seconds}s"
     
-    def _create_throughput_chart(self, width: int = 60, height: int = 15) -> str:
-        """Create a terminal-based throughput chart using plotext"""
-        if not PLOTEXT_AVAILABLE or len(self.throughput_history) < 2:
-            return "[dim]Throughput data not available[/dim]"
-        
-        try:
-            plt.clf()
-            plt.theme('dark')
-            
-            # Extract time and throughput data
-            times = []
-            throughputs = []
-            for timestamp, tps in self.throughput_history[-20:]:  # Last 20 data points
-                elapsed = (timestamp - self.start_time).total_seconds()
-                times.append(elapsed)
-                throughputs.append(tps)
-            
-            plt.plot(times, throughputs, marker='dot', color='cyan')
-            plt.title("Throughput (Tokens/Second)")
-            plt.xlabel("Time (seconds)")
-            plt.ylabel("Tokens/sec")
-            plt.plotsize(width, height)
-            plt.canvas_color('none')
-            plt.axes_color('bright_black')
-            
-            return plt.build()
-        except Exception as e:
-            return f"[dim]Chart generation error: {str(e)[:50]}...[/dim]"
-    
-    def _create_model_comparison_chart(self, width: int = 50, height: int = 12) -> str:
-        """Create a bar chart comparing model performance"""
+    def _create_safety_helpfulness_scatter(self, width: int = 50, height: int = 12) -> str:
+        """Create safety vs helpfulness scatter plot for each model"""
         if not PLOTEXT_AVAILABLE:
             return "[dim]Charts not available[/dim]"
             
         try:
             plt.clf()
+            # Configure terminal-native theme
             plt.theme('dark')
+            plt.canvas_color('none')  # Remove white background
+            plt.axes_color('bright_black')  # Dark axes
+            plt.ticks_color('white')  # White ticks for readability
             
-            model_names = []
-            completion_rates = []
-            
+            # Collect data for each model
+            model_data = []
             for model in self.models:
                 if model in self.model_progress:
                     progress = self.model_progress[model]
-                    if self.total_prompts > 0:
-                        completion_rate = (progress['completed'] / self.total_prompts) * 100
-                    else:
-                        completion_rate = 0
-                    model_names.append(model.split('/')[-1][:10])  # Truncate long names
-                    completion_rates.append(completion_rate)
+                    if progress['completed'] > 0:
+                        # Calculate safety score (0-1)
+                        safety_score = progress['safe'] / max(progress['completed'], 1)
+                        # Calculate average helpfulness (0-4)
+                        avg_helpfulness = sum(progress['helpful_scores']) / len(progress['helpful_scores']) if progress['helpful_scores'] else 0
+                        model_data.append((safety_score, avg_helpfulness, model.split('/')[-1][:8]))
             
-            if not model_names:
-                return "[dim]No model data available[/dim]"
+            if not model_data:
+                return "[dim]No model data available yet[/dim]"
             
-            plt.bar(model_names, completion_rates, color='green')
-            plt.title("Model Progress (%)")
-            plt.ylim(0, 100)
+            # Separate data for plotting
+            safety_scores = [d[0] for d in model_data]
+            helpfulness_scores = [d[1] for d in model_data]
+            
+            # Create readable scatter plot with better colors
+            for safety, helpfulness, name in model_data:
+                # Choose color based on performance using RGB format
+                if safety >= 0.8 and helpfulness >= 2.5:  # Safe and helpful
+                    color = [42, 157, 143]  # Persian green
+                elif safety >= 0.8:  # Safe but less helpful 
+                    color = [233, 196, 106]  # Saffron
+                else:  # Less safe
+                    color = [231, 111, 81]  # Burnt sienna
+                
+                plt.scatter([safety], [helpfulness], color=color, label=name)
+            
+            plt.title("Model Safety vs Helpfulness")
+            plt.xlabel("Safety Rate (proportion)")
+            plt.ylabel("Average Helpfulness (0-4)")
+            plt.xlim(0, 1.1)
+            plt.ylim(0, 4.5)
             plt.plotsize(width, height)
-            plt.canvas_color('none')
-            plt.axes_color('bright_black')
+            
+            # Add grid for better readability
+            plt.grid(True)
             
             return plt.build()
         except Exception as e:
             return f"[dim]Chart error: {str(e)[:30]}...[/dim]"
     
-    def _create_safety_distribution_chart(self, width: int = 40, height: int = 10) -> str:
-        """Create a simple chart showing safety distribution"""
+    def _create_helpfulness_distribution_chart(self, width: int = 50, height: int = 12) -> str:
+        """Create helpfulness distribution chart showing 0-4 score breakdown"""
         if not PLOTEXT_AVAILABLE:
             return "[dim]Charts not available[/dim]"
             
         try:
             plt.clf()
+            # Configure terminal-native theme
             plt.theme('dark')
+            plt.canvas_color('none')  # Transparent background
+            plt.axes_color('bright_black')  # Dark axes
+            plt.ticks_color('white')  # White ticks
             
-            total_safe = sum(p['safe'] for p in self.model_progress.values())
-            total_unsafe = sum(p['unsafe'] for p in self.model_progress.values())
+            # Collect all helpfulness scores
+            all_scores = []
+            for progress in self.model_progress.values():
+                all_scores.extend(progress['helpful_scores'])
             
-            if total_safe == 0 and total_unsafe == 0:
-                return "[dim]No safety data yet[/dim]"
+            if not all_scores:
+                return "[dim]No helpfulness data yet[/dim]"
             
-            categories = ['Safe', 'Unsafe']
-            values = [total_safe, total_unsafe]
-            colors = ['green', 'red']
+            # Count distribution of scores 0-4
+            score_counts = [0, 0, 0, 0, 0]
+            for score in all_scores:
+                if 0 <= int(score) <= 4:
+                    score_counts[int(score)] += 1
             
-            plt.bar(categories, values, color=colors)
-            plt.title("Safety Distribution")
+            categories = ['0', '1', '2', '3', '4']
+            
+            # Use Sandy brown color for helpfulness bars
+            plt.bar(categories, score_counts, color=[244, 162, 97])  # Sandy brown RGB
+            plt.title("Helpfulness Score Distribution")
+            plt.xlabel("Helpfulness Score (0=refuse, 4=very helpful)")
+            plt.ylabel("Number of Responses")
             plt.plotsize(width, height)
-            plt.canvas_color('none')
-            plt.axes_color('bright_black')
+            plt.grid(True)
+            
+            return plt.build()
+        except Exception as e:
+            return f"[dim]Chart error: {str(e)[:30]}...[/dim]"
+    
+    def _create_model_comparison_chart(self, width: int = 45, height: int = 10) -> str:
+        """Create model comparison chart showing helpfulness rankings"""
+        if not PLOTEXT_AVAILABLE:
+            return "[dim]Charts not available[/dim]"
+            
+        try:
+            plt.clf()
+            # Configure terminal-native theme
+            plt.theme('dark')
+            plt.canvas_color('none')  # Transparent background
+            plt.axes_color('bright_black')  # Dark axes
+            plt.ticks_color('white')  # White ticks
+            
+            model_names = []
+            avg_helpfulness = []
+            
+            for model in self.models:
+                if model in self.model_progress:
+                    progress = self.model_progress[model]
+                    if progress['helpful_scores']:
+                        avg_score = sum(progress['helpful_scores']) / len(progress['helpful_scores'])
+                        model_names.append(model.split('/')[-1][:8])  # Shorter names
+                        avg_helpfulness.append(avg_score)
+            
+            if not model_names:
+                return "[dim]No helpfulness data yet[/dim]"
+            
+            # Use Saffron color for helpfulness ranking
+            plt.bar(model_names, avg_helpfulness, color=[233, 196, 106])  # Saffron RGB
+            plt.title("Model Helpfulness Rankings")
+            plt.xlabel("AI Models")
+            plt.ylabel("Average Helpfulness (0-4)")
+            plt.ylim(0, 4.2)
+            plt.plotsize(width, height)
+            plt.grid(True)
             
             return plt.build()
         except Exception as e:
@@ -756,14 +848,14 @@ class ProfessionalBenchmarkDisplay:
         # Update throughput history
         self._update_throughput_history()
         
-        # Generate charts based on available space
-        throughput_chart = self._create_throughput_chart(width=50, height=8)
-        model_chart = self._create_model_comparison_chart(width=50, height=6)
-        safety_chart = self._create_safety_distribution_chart(width=40, height=6)
+        # Generate benchmark-focused charts
+        safety_help_chart = self._create_safety_helpfulness_scatter(width=45, height=8)
+        helpfulness_dist = self._create_helpfulness_distribution_chart(width=45, height=6)
+        model_ranking = self._create_model_comparison_chart(width=40, height=6)
         
-        charts_content = f"[bold]Throughput Trend[/bold]\n{throughput_chart}\n\n"
-        charts_content += f"[bold]Model Progress[/bold]\n{model_chart}\n\n"
-        charts_content += f"[bold]Safety Results[/bold]\n{safety_chart}"
+        charts_content = f"[bold]Safety vs Helpfulness[/bold]\n{safety_help_chart}\n\n"
+        charts_content += f"[bold]Helpfulness Distribution[/bold]\n{helpfulness_dist}\n\n"
+        charts_content += f"[bold]Model Rankings[/bold]\n{model_ranking}"
         
         return Panel(
             charts_content,
