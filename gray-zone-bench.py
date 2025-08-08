@@ -14,25 +14,28 @@ Examples
 --------
 # Smoke test: first prompt only (default), compare 3 models
 uv run --with openai --with datasets --with pandas \
-  python run_safe_completion_llmjudge_hf_v2.py \
+  python gray-zone-bench.py \
   --models gpt-5-mini o4-mini o3-mini \
   --judge-model gpt-5-mini \
-  --hf-dataset walledai/HarmBench --hf-config standard --hf-split train \
-  --num-prompts 1 --save-outputs-dir out
+  --judge-task both \
+  --hf-dataset walledai/HarmBench --hf-config standard \
+  --num-prompts 1
 
 # Take first 10 prompts from contextual subset and include context
 uv run --with openai --with datasets --with pandas \
-  python run_safe_completion_llmjudge_hf_v2.py \
+  python gray-zone-bench.py \
   --models gpt-5-mini,o4-mini \
   --judge-model gpt-5-mini \
-  --hf-dataset walledai/HarmBench --hf-config contextual --hf-split train \
-  --context-column context --num-prompts 10 --save-outputs-dir out
+  --judge-task both \
+  --hf-dataset walledai/HarmBench --hf-config contextual \
+  --context-column context --num-prompts 10
 
 # Full run for a window of 25 prompts starting at index 50
-uv run --with openai --with datasets \
-  python run_safe_completion_llmjudge_hf_v2.py \
+uv run --with openai --with datasets --with pandas \
+  python gray-zone-bench.py \
   --models gpt-5-mini o4-mini \
   --judge-model gpt-5-mini \
+  --judge-task both \
   --hf-dataset walledai/HarmBench --hf-config standard \
   --start-index 50 --num-prompts 25
 
@@ -349,7 +352,6 @@ def main():
     ap.add_argument("--num-prompts", default="1", help="Number of prompts to run: 1, N, or ALL." )
     ap.add_argument("--shuffle", action="store_true", help="Shuffle before selecting window." )
     ap.add_argument("--seed", type=int, default=42, help="Seed for shuffling." )
-    ap.add_argument("--save-outputs-dir", default="out", help="Directory to write outputs." )
     ap.add_argument("--max-output-tokens", type=int, default=2048, help="Max tokens for model answers." )
     ap.add_argument("--temperature", type=float, default=None, help="Sampling temperature (optional)." )
     ap.add_argument("--reasoning-effort", default=None, choices=[None, "low", "medium", "high"],
@@ -360,7 +362,7 @@ def main():
     ap.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"],
                     help="Logging level for console output.")
     ap.add_argument("--log-file", default=None,
-                    help="Optional path for a log file. Defaults to <save-outputs-dir>/harmbench_<config>/run.log")
+                    help="Optional path for a log file. Defaults to out/harmbench_<config>/run.log")
     args = ap.parse_args()
 
     # Configure console logging early
@@ -421,7 +423,7 @@ def main():
         rows.append(PromptRow(idx=i, prompt=prompt, context=ctx, category=cat))
 
     # Output dirs
-    root = Path(args.save_outputs_dir or "out") / ("harmbench_" + args.hf_config)
+    root = Path("out") / ("harmbench_" + args.hf_config)
     ensure_dir(root)
     # Add file handler
     try:
