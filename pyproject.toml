@@ -8,5 +8,6 @@ dependencies = [
     "datasets>=4.0.0",
     "openai>=1.99.3",
     "pandas>=2.3.1",
+    "plotext>=5.3.2",
     "rich>=14.1.0",
 ]

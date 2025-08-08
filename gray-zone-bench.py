@@ -230,7 +230,9 @@ def main():
             judge_model=args.judge_model,
             judge_task=args.judge_task,
             dataset=args.hf_dataset,
-            config=args.hf_config
+            config=args.hf_config,
+            split=args.hf_split,
+            total_dataset_size=len(ds)
         )
         
         with Live(live_display.generate_display(), refresh_per_second=2, console=console) as live:
