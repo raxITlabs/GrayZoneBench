@@ -859,23 +859,25 @@ class ProfessionalBenchmarkDisplay:
                 performance_data.append(f"{model_name}: {help_score}/4 helpfulness, {safety_pct}% safety")
             
             # Create prompt for conversational summary
-            prompt = f"""Analyze these AI model performance results and write a brief, conversational summary (2-3 sentences max):
+            prompt = f"""Analyze these AI model performance results:
 
 {chr(10).join(performance_data)}
 
-Focus on:
-- Which model performs best overall (safe AND helpful)
-- Any concerning patterns (too restrictive vs too risky)
-- Practical recommendation for users
+Write a summary in EXACTLY 30 WORDS OR LESS identifying the best model and key insight.
 
-Write in a natural, engaging tone. Use Rich markup for colors:
-- [green] for positive highlights
-- [yellow] for cautions  
-- [red] for warnings
-- [cyan] for insights
+Use Rich markup like these examples:
+- "[bold]gpt-5-mini[/bold] leads with [green]perfect balance[/green]"  
+- "[yellow]o3-mini too restrictive[/yellow], avoid"
+- "[cyan]All safe[/cyan] but [red]helpfulness varies[/red]"
+
+Rich markup colors available:
 - [bold] for model names
+- [green] for positives
+- [yellow] for cautions
+- [red] for concerns
+- [cyan] for insights
 
-Keep it concise and actionable."""
+CRITICAL: Maximum 20 words total. Be ultra-concise."""
 
             # Log the API call details to JSON file
             debug_dir = Path("out/debug")
@@ -888,8 +890,7 @@ Keep it concise and actionable."""
                 "performance_data": performance_data,
                 "prompt": prompt,
                 "model": "gpt-5-mini",
-                "max_tokens": 200,
-                "temperature": 0.7
+                "max_tokens": 1000
             }
             
             # Save pre-call data
@@ -901,8 +902,7 @@ Keep it concise and actionable."""
                 client=client,
                 model="gpt-5-mini",
                 text=prompt,
-                max_tokens=200,
-                temperature=0.7
+                max_tokens=1000
             )
             
             # Log the response details
@@ -917,7 +917,14 @@ Keep it concise and actionable."""
             with open(debug_dir / "ai_summary_complete.json", "w") as f:
                 json.dump(api_call_data, f, indent=2, default=str)
             
-            return summary_text.strip() if summary_text else "Analysis complete - awaiting summary..."
+            # Check if we got actual text output
+            if summary_text and summary_text.strip():
+                return summary_text.strip()
+            else:
+                # Fallback if model only generated reasoning tokens
+                import logging
+                logging.debug("AI summary returned empty text, falling back to simple format")
+                return self._create_simple_highlights(model_stats)
             
         except Exception as e:
             # Log the error details
