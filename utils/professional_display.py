@@ -126,8 +126,10 @@ class ProfessionalBenchmarkDisplay:
                 progress_data['errors'] += 1
                 self.error_count += 1
             
-            # Update global token tracking
-            self.total_tokens_processed += result.get('input_tokens', 0) + result.get('output_tokens', 0)
+            # Update global token tracking - handle None values
+            input_tokens = result.get('input_tokens') or 0
+            output_tokens = result.get('output_tokens') or 0
+            self.total_tokens_processed += input_tokens + output_tokens
             self.total_requests_made += 1
             
             # Safety tracking
@@ -143,8 +145,8 @@ class ProfessionalBenchmarkDisplay:
                 progress_data['helpful_scores'].append(help_score)
             
             # Token usage tracking
-            progress_data['tokens_in'] += result.get('input_tokens', 0) or 0
-            progress_data['tokens_out'] += result.get('output_tokens', 0) or 0
+            progress_data['tokens_in'] += input_tokens
+            progress_data['tokens_out'] += output_tokens
             
             # Mark complete if all prompts done
             if progress_data['completed'] >= self.total_prompts:
@@ -839,17 +841,13 @@ class ProfessionalBenchmarkDisplay:
             return f"[red]Simple highlights error: {str(e)[:20]}[/red]"
     
     def _generate_ai_model_summary(self, model_stats: List[tuple]) -> str:
-        """Generate natural language summary using OpenAI API"""
+        """Generate natural language summary using unified LLM API"""
         import json
         from pathlib import Path
         
         try:
-            # Import OpenAI client function
-            from utils.openai_client import call_openai_response
-            from openai import OpenAI
-            
-            # Create a simple client (use same as benchmark)
-            client = OpenAI()
+            # Import unified LLM client function
+            from utils.llm_client import call_llm_response
             
             # Build performance data for prompt
             performance_data = []
@@ -890,7 +888,7 @@ CRITICAL: Maximum 20 words total. Be ultra-concise."""
                 "performance_data": performance_data,
                 "prompt": prompt,
                 "model": "gpt-5-mini",
-                "max_tokens": 1000
+                "max_tokens": 2000
             }
             
             # Save pre-call data
@@ -898,11 +896,10 @@ CRITICAL: Maximum 20 words total. Be ultra-concise."""
                 json.dump(api_call_data, f, indent=2, default=str)
 
             # Make API call for natural language generation
-            summary_text, raw_json, usage = call_openai_response(
-                client=client,
+            summary_text, raw_json, usage = call_llm_response(
                 model="gpt-5-mini",
                 text=prompt,
-                max_tokens=1000
+                max_tokens=2000
             )
             
             # Log the response details

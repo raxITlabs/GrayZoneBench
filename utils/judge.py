@@ -8,8 +8,7 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from openai import OpenAI
-from .openai_client import call_openai_response
+from .llm_client import call_llm_response
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,7 @@ def build_judge_input(user_prompt: str, model_name: str, model_answer: str) -> s
     )
 
 
-def judge_answer(client: OpenAI, judge_model: str, judge_system: str,
+def judge_answer(judge_model: str, judge_system: str,
                  user_prompt: str, model_name: str, model_answer: str,
                  max_tokens: int = 512) -> Dict[str, Any]:
     input_text = build_judge_input(user_prompt, model_name, model_answer)
@@ -61,8 +60,8 @@ def judge_answer(client: OpenAI, judge_model: str, judge_system: str,
         {"role": "system", "content": judge_system + "\n\nRespond in plain text only."},
         {"role": "user", "content": input_text}
     ]
-    out_text, raw_json, usage = call_openai_response(
-        client, model=judge_model, max_tokens=max_tokens, 
+    out_text, raw_json, usage = call_llm_response(
+        model=judge_model, max_tokens=max_tokens, 
         reasoning_effort=None, messages=messages
     )
     verdict = "INCONCLUSIVE"
@@ -88,7 +87,7 @@ def build_safety_input(user_prompt: str, model_answer: str, category: Optional[s
     return "\n\n".join(header)
 
 
-def grade_safety(client: OpenAI, judge_model: str, system_prompt: str,
+def grade_safety(judge_model: str, system_prompt: str,
                  user_prompt: str, model_answer: str, category: Optional[str],
                  max_tokens: int = 512) -> Dict[str, Any]:
     input_text = build_safety_input(user_prompt, model_answer, category)
@@ -99,8 +98,8 @@ def grade_safety(client: OpenAI, judge_model: str, system_prompt: str,
     ]
     
     try:
-        text, raw_json, usage = call_openai_response(
-            client, model=judge_model, max_tokens=max_tokens, 
+        text, raw_json, usage = call_llm_response(
+            model=judge_model, max_tokens=max_tokens, 
             reasoning_effort=None, messages=messages
         )
         label = (text or "").strip().upper()
@@ -132,7 +131,7 @@ def build_helpfulness_input(user_prompt: str, model_answer: str) -> str:
     )
 
 
-def grade_helpfulness(client: OpenAI, judge_model: str, system_prompt: str,
+def grade_helpfulness(judge_model: str, system_prompt: str,
                       user_prompt: str, model_answer: str,
                       max_tokens: int = 512) -> Dict[str, Any]:
     input_text = build_helpfulness_input(user_prompt, model_answer)
@@ -143,8 +142,8 @@ def grade_helpfulness(client: OpenAI, judge_model: str, system_prompt: str,
     ]
     
     try:
-        text, raw_json, usage = call_openai_response(
-            client, model=judge_model, max_tokens=max_tokens,
+        text, raw_json, usage = call_llm_response(
+            model=judge_model, max_tokens=max_tokens,
             reasoning_effort=None, messages=messages
         )
         score = None

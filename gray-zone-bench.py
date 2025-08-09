@@ -50,9 +50,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 # 3rd party (install via uv/pip): openai, datasets, rich
 from datasets import load_dataset
-from openai import OpenAI
+# OpenAI import removed - now using unified LLM client
 
 # Rich for beautiful CLI output
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -63,11 +67,12 @@ from rich.live import Live
 # Import utilities
 from utils import (
     create_results_table, show_config_panel, show_completion_panel,
-    call_openai_response, grade_safety, grade_helpfulness, judge_answer,
+    grade_safety, grade_helpfulness, judge_answer,
     DEFAULT_JUDGE_SYSTEM, DEFAULT_SAFETY_GRADER_SYSTEM, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
     PromptRow, normalize_models_arg, build_prompt_text,
     ensure_dir, now_iso
 )
+from utils.llm_client import call_llm_response
 from utils.cli_display import console
 from utils.professional_display import ProfessionalBenchmarkDisplay
 
@@ -143,13 +148,27 @@ def main():
     if not model_list:
         raise SystemExit("No models provided via --models")
 
-    # OpenAI client
-    client_kwargs = {}
-    if args.base_url:
-        client_kwargs["base_url"] = args.base_url
-    if args.api_key:
-        client_kwargs["api_key"] = args.api_key
-    client = OpenAI(**client_kwargs)
+    # Model validation - check if all models are supported
+    from utils.model_providers import validate_model_support, get_supported_models
+    
+    unsupported_models = [model for model in model_list if not validate_model_support(model)]
+    if unsupported_models:
+        supported = get_supported_models()
+        print(f"\n❌ Unsupported models: {', '.join(unsupported_models)}")
+        print(f"\n✅ Supported models by provider:")
+        for provider, models in supported.items():
+            print(f"  {provider.upper()}: {', '.join(models[:5])}{'...' if len(models) > 5 else ''}")
+        return
+    
+    # Legacy arguments handling (base_url and api_key are now handled per-provider)
+    if args.base_url or args.api_key:
+        logger.warning(
+            "--base-url and --api-key arguments are deprecated in multi-provider mode. "
+            "Use provider-specific environment variables instead:"
+            "\n  OpenAI: OPENAI_API_KEY"
+            "\n  Anthropic: AWS_PROFILE (or AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY), AWS_REGION"
+            "\n  Google: GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION"
+        )
 
     # Load judge system prompt
     judge_system = DEFAULT_JUDGE_SYSTEM
@@ -251,8 +270,8 @@ def main():
                     
                     # Process the prompt (same logic as before)
                     try:
-                        answer_text, raw_json, usage = call_openai_response(
-                            client, model=model, text=prompt_text, max_tokens=args.max_output_tokens,
+                        answer_text, raw_json, usage = call_llm_response(
+                            model=model, text=prompt_text, max_tokens=args.max_output_tokens,
                             temperature=args.temperature, reasoning_effort=args.reasoning_effort
                         )
                         status = "ok"
@@ -273,7 +292,7 @@ def main():
                             live_display.update_progress(model, prompt_info, 'judging_safety')
                             live.update(live_display.generate_display())
                             
-                            j_safety = grade_safety(client, args.judge_model, DEFAULT_SAFETY_GRADER_SYSTEM,
+                            j_safety = grade_safety(args.judge_model, DEFAULT_SAFETY_GRADER_SYSTEM,
                                                     prompt_text, answer_text, row.category)
                             j["safety"] = j_safety
                         if args.judge_task in {"helpfulness", "both"}:
@@ -281,11 +300,11 @@ def main():
                             live_display.update_progress(model, prompt_info, 'judging_helpfulness')
                             live.update(live_display.generate_display())
                             
-                            j_help = grade_helpfulness(client, args.judge_model, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
+                            j_help = grade_helpfulness(args.judge_model, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
                                                        prompt_text, answer_text)
                             j["helpfulness"] = j_help
                         if not j:
-                            j = judge_answer(client, args.judge_model, judge_system, prompt_text, model, answer_text)
+                            j = judge_answer(args.judge_model, judge_system, prompt_text, model, answer_text)
                     except Exception as e:
                         if not j:
                             j = {"verdict": "INCONCLUSIVE", "rationale": f"judge_error: {e}", "raw": {}, "usage": {}}
@@ -352,8 +371,8 @@ def main():
                         "verdict": j.get("verdict", None),
                         "safety": (j.get("safety", {}) or {}).get("label"),
                         "helpfulness": (j.get("helpfulness", {}) or {}).get("score"),
-                        "input_tokens": (record["usage"] or {}).get("input_tokens"),
-                        "output_tokens": (record["usage"] or {}).get("output_tokens"),
+                        "input_tokens": (record["usage"] or {}).get("input_tokens") or 0,
+                        "output_tokens": (record["usage"] or {}).get("output_tokens") or 0,
                     }
                     all_results.append(result_item)
                     
@@ -392,8 +411,8 @@ def main():
 
                     # Call candidate model
                     try:
-                        answer_text, raw_json, usage = call_openai_response(
-                            client, model=model, text=prompt_text, max_tokens=args.max_output_tokens,
+                        answer_text, raw_json, usage = call_llm_response(
+                            model=model, text=prompt_text, max_tokens=args.max_output_tokens,
                             temperature=args.temperature, reasoning_effort=args.reasoning_effort
                         )
                         status = "ok"
@@ -424,16 +443,16 @@ def main():
                     j: Dict[str, Any] = {}
                     try:
                         if args.judge_task in {"safety", "both"}:
-                            j_safety = grade_safety(client, args.judge_model, DEFAULT_SAFETY_GRADER_SYSTEM,
+                            j_safety = grade_safety(args.judge_model, DEFAULT_SAFETY_GRADER_SYSTEM,
                                                     prompt_text, answer_text, row.category)
                             j["safety"] = j_safety
                         if args.judge_task in {"helpfulness", "both"}:
-                            j_help = grade_helpfulness(client, args.judge_model, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
+                            j_help = grade_helpfulness(args.judge_model, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
                                                        prompt_text, answer_text)
                             j["helpfulness"] = j_help
                         if not j:
                             # Fallback to legacy verdict for backward compatibility
-                            j = judge_answer(client, args.judge_model, judge_system, prompt_text, model, answer_text)
+                            j = judge_answer(args.judge_model, judge_system, prompt_text, model, answer_text)
                     except Exception as e:
                         if args.debug:
                             logger.exception("Judge error | model=%s uid=%s: %s", model, uid, e)
@@ -508,8 +527,8 @@ def main():
                         "verdict": j.get("verdict", None),
                         "safety": (j.get("safety", {}) or {}).get("label"),
                         "helpfulness": (j.get("helpfulness", {}) or {}).get("score"),
-                        "input_tokens": (record["usage"] or {}).get("input_tokens"),
-                        "output_tokens": (record["usage"] or {}).get("output_tokens"),
+                        "input_tokens": (record["usage"] or {}).get("input_tokens") or 0,
+                        "output_tokens": (record["usage"] or {}).get("output_tokens") or 0,
                     })
                     
                     # Update progress
