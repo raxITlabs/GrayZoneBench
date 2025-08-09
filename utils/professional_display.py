@@ -171,6 +171,9 @@ class ProfessionalBenchmarkDisplay:
         charts_panel = self._create_charts_panel()
         current_activity = self._create_current_activity()
         
+        # Use fixed height for charts panel
+        charts_height = 15
+        
         # Use responsive layout based on terminal width
         if terminal_width >= 120:
             # Wide layout: 3 columns with charts
@@ -195,7 +198,7 @@ class ProfessionalBenchmarkDisplay:
             
             layout["right_column"].split_column(
                 Layout(statistics_panel, size=8),
-                Layout(charts_panel, size=15)
+                Layout(charts_panel, size=charts_height)
             )
             
             layout["bottom_panels"].update(current_activity)
@@ -206,7 +209,7 @@ class ProfessionalBenchmarkDisplay:
                 Layout(context_header, size=8),  # Increased from 4 to 8
                 Layout(name="info_row", size=8),
                 Layout(evaluation_table, size=len(self.models) + 6),
-                Layout(name="charts_row", size=12),
+                Layout(name="charts_row", size=charts_height),
                 Layout(current_activity, size=6)
             )
             
@@ -227,11 +230,48 @@ class ProfessionalBenchmarkDisplay:
                 Layout(dataset_info, size=6),
                 Layout(evaluation_table, size=len(self.models) + 6),
                 Layout(statistics_panel, size=8),
-                Layout(charts_panel, size=10),
+                Layout(charts_panel, size=charts_height),
                 Layout(current_activity, size=5)
             )
         
         return layout
+    
+    def _calculate_charts_height(self) -> int:
+        """Calculate dynamic height for charts panel based on content"""
+        # Base height for headers and spacing
+        base_height = 6
+        
+        # Check if we have data for charts
+        all_scores = []
+        for progress in self.model_progress.values():
+            all_scores.extend(progress['helpful_scores'])
+        
+        if not all_scores:
+            # No data - minimal height
+            return base_height
+        
+        # Calculate additional height based on content
+        additional_height = 0
+        
+        # Height for bar chart (one line per score type with data)
+        score_counts = [0, 0, 0, 0, 0]
+        for score in all_scores:
+            if 0 <= int(score) <= 4:
+                score_counts[int(score)] += 1
+        
+        bars_with_data = sum(1 for count in score_counts if count > 0)
+        additional_height += bars_with_data  # One line per bar
+        
+        # Height for model highlights (1-2 lines)
+        model_count = sum(1 for model in self.models if model in self.model_progress and 
+                         self.model_progress[model]['completed'] > 0 and 
+                         self.model_progress[model]['helpful_scores'])
+        if model_count > 0:
+            additional_height += min(2, model_count)  # Best + worst (max 2 lines)
+        
+        # Note: This function is no longer used since we switched to fixed height
+        # Keeping for potential future use
+        return 15  # Fixed height
     
     def _create_dataset_info_panel(self) -> Panel:
         """Create comprehensive dataset information panel"""
@@ -252,7 +292,7 @@ class ProfessionalBenchmarkDisplay:
         
         return Panel(
             dataset_info.rstrip(),
-            title="Dataset Information",
+            title="[bold]Dataset Information[/bold]",
             box=box.ROUNDED,
             # style="cyan"
         )
@@ -283,7 +323,7 @@ class ProfessionalBenchmarkDisplay:
         
         return Panel(
             stats.rstrip(),
-            title="Real-time Statistics",
+            title="[bold]Real-time Statistics[/bold]",
             box=box.ROUNDED,
             # style="magenta"
         )
@@ -316,7 +356,7 @@ class ProfessionalBenchmarkDisplay:
         
         return Panel(
             config_text,
-            title="Configuration",
+            title="[bold]Configuration[/bold]",
             box=box.ROUNDED,
             # style="yellow"
         )
@@ -416,9 +456,9 @@ class ProfessionalBenchmarkDisplay:
         
         return Panel(
             header_content,
-            title="Safe Completion Benchmark Overview",
+            title="[bold]Safe Completion Benchmark Overview[/bold]",
             box=box.ROUNDED,
-            style="white",
+            # style="white",
             padding=(1, 2)
         )
     
@@ -576,8 +616,8 @@ class ProfessionalBenchmarkDisplay:
             total_tokens_in = sum(p['tokens_in'] for p in self.model_progress.values())
             total_tokens_out = sum(p['tokens_out'] for p in self.model_progress.values())
             
-            activity = f"[bold green]■ Safe Completion Evaluation Complete![/bold green]\n\n"
-            activity += f"[default]Duration:[/default] [white]{elapsed_str}[/white]\n"
+            activity = f"[green]■ Safe Completion Evaluation Complete![/green]\n\n"
+            activity += f"[default]Duration:[/default] {elapsed_str}\n"
             activity += f"[default]Safety:[/default] [green]{total_safe} safe[/green] / [red]{total_unsafe} unsafe[/red]\n"
             activity += f"[default]Tokens:[/default] [yellow]{total_tokens_in:,}[/yellow] in → [white]{total_tokens_out:,}[/white] out\n"
             activity += f"[dim]Performance:[/dim] {self.performance_metrics['requests_per_second']:.1f} req/sec, {self.performance_metrics['tokens_per_second']:.0f} tok/sec"
@@ -678,7 +718,7 @@ class ProfessionalBenchmarkDisplay:
         
         return Panel(
             activity.rstrip('\n'),
-            title="Safe Completion Monitor",
+            title="[bold]Safe Completion Monitor[/bold]",
             box=box.ROUNDED,
             # style="green"
         )
@@ -697,143 +737,216 @@ class ProfessionalBenchmarkDisplay:
             return f"{seconds}s"
     
     def _create_unicode_bar_chart(self, data: List[tuple], title: str, max_width: int = 20) -> str:
-        """Create a Unicode bar chart using Rich monotone colors"""
-        if not data:
-            return "No data available"
-        
+        """Create a Unicode bar chart with placeholder structure that fills incrementally"""
         try:
-            # Find max value for scaling
-            max_val = max(item[1] for item in data if len(item) > 1)
-            if max_val == 0:
-                return "No data to display"
+            # Always show all score categories 0-4 with placeholder structure
+            score_counts = [0, 0, 0, 0, 0]  # Initialize all scores to 0
+            
+            # Fill in actual data if available
+            if data:
+                for label, value in data:
+                    if "Score " in label:
+                        score_num = int(label.split()[1])
+                        if 0 <= score_num <= 4:
+                            score_counts[score_num] = value
+            
+            # Find max value for scaling (use at least 1 to show placeholder)
+            max_val = max(max(score_counts), 1)
             
             chart_lines = []
-            for label, value in data:
+            for i in range(5):  # Always show Score 0-4
+                count = score_counts[i]
+                
                 # Calculate bar length
-                bar_length = int((value / max_val) * max_width)
-                
-                # Create bar using Unicode blocks with compatible colors
-                if bar_length > 0:
-                    full_blocks = bar_length
-                    bar = "[cyan]" + "█" * full_blocks + "[/cyan]"
+                if count > 0:
+                    bar_length = max(1, int((count / max_val) * max_width))
+                    filled_blocks = bar_length
+                    empty_blocks = max_width - filled_blocks
+                    # Show filled + empty to maintain consistent width
+                    bar = "[cyan]" + "█" * filled_blocks + "[/cyan]" + "[dim]" + "░" * empty_blocks + "[/dim]"
                 else:
-                    bar = "░"
+                    # Show placeholder structure
+                    bar = "[dim]" + "░" * max_width + "[/dim]"
                 
-                # Format value
-                if isinstance(value, float):
-                    value_str = f"{value:.1f}"
-                else:
-                    value_str = str(value)
+                # Format count
+                count_str = str(count)
                 
-                chart_lines.append(f"{label:<12} {bar} {value_str}")
+                chart_lines.append(f"Score {i}    {bar} {count_str}")
             
             return "\n".join(chart_lines)
         except Exception as e:
             return f"Chart error: {str(e)[:30]}..."
     
-    def _create_model_ranking_table(self) -> Table:
-        """Create model ranking table with visual performance indicators"""
-        table = Table(
-            box=box.SIMPLE,
-            show_header=True,
-            header_style="white bold",
-            title="Safe Completion Rankings",
-            title_style="cyan bold"
-        )
-        
-        table.add_column("Rank", style="yellow", width=4)
-        table.add_column("Model", style="white", width=12)
-        table.add_column("Safety", style="green", width=8)
-        table.add_column("SC", style="cyan", width=8)  # Safe Completion
-        table.add_column("Balance", style="magenta", width=15)
-        
-        # Collect model performance data
-        model_stats = []
-        for model in self.models:
-            if model in self.model_progress:
-                progress = self.model_progress[model]
-                if progress['completed'] > 0 and progress['helpful_scores']:
-                    model_name = model.split('/')[-1][:10]
-                    avg_help = sum(progress['helpful_scores']) / len(progress['helpful_scores'])
-                    safety_rate = progress['safe'] / max(progress['completed'], 1)
-                    balance_score = safety_rate * avg_help  # Safety * Helpfulness
-                    model_stats.append((model_name, avg_help, safety_rate * 100, balance_score))
-        
-        if not model_stats:
-            table.add_row("-", "No data yet", "-", "-", "-")
-            return table
-        
-        # Sort by balance score
-        model_stats.sort(key=lambda x: x[3], reverse=True)
-        
-        for i, (name, help_score, safety_pct, balance) in enumerate(model_stats):
-            # Create visual balance bar
-            bar_length = int(balance * 5)  # Scale to reasonable length
-            balance_bar = "[magenta]" + "█" * min(bar_length, 10) + "[/magenta]"
-            if bar_length < 3:
-                balance_bar = "░░░"
-            
-            table.add_row(
-                f"[yellow]{i+1}[/yellow]",
-                f"[white]{name}[/white]",
-                f"[green]{safety_pct:.0f}%[/green]",
-                f"[cyan]{help_score:.1f}/4[/cyan]",
-                f"{balance_bar} [white]{balance:.2f}[/white]"
-            )
-        
-        return table
-    
-    def _create_safety_grid(self) -> str:
-        """Create a safety positioning grid using Unicode characters"""
+    def _create_model_highlights(self) -> str:
+        """Create model highlights - AI-generated after completion, simple during benchmark"""
         try:
-            # Collect model data
-            model_data = []
+            # Collect model performance data
+            model_stats = []
             for model in self.models:
                 if model in self.model_progress:
                     progress = self.model_progress[model]
-                    if progress['completed'] > 0:
+                    if progress['completed'] > 0 and progress['helpful_scores']:
+                        model_name = model.split('/')[-1]
+                        avg_help = sum(progress['helpful_scores']) / len(progress['helpful_scores'])
                         safety_rate = progress['safe'] / max(progress['completed'], 1)
-                        avg_help = sum(progress['helpful_scores']) / len(progress['helpful_scores']) if progress['helpful_scores'] else 0
-                        model_data.append((model.split('/')[-1][:8], safety_rate, avg_help))
+                        model_stats.append((model_name, avg_help, safety_rate))
             
-            if not model_data:
-                return "No safe completion data available yet"
+            if not model_stats:
+                return "Models are still being evaluated..."
             
-            # Create a simple 2x2 grid representation  
-            grid_lines = []
-            grid_lines.append("Safe Completion vs Blind Refusal Positioning")
-            grid_lines.append("")
+            # Check if benchmark is complete (all models finished)
+            all_complete = all(
+                self.model_progress[model]['status'] == 'complete' 
+                for model in self.models
+            )
             
-            # Categorize models by safe completion capability
-            safe_completion = []  # Safe AND helpful
-            safe_refusal = []     # Safe but blind refusal
-            risky_helpful = []    # Helpful but potentially unsafe
-            risky_refusal = []    # Neither safe nor helpful
+            if all_complete:
+                # Benchmark complete - generate AI summary
+                ai_summary = self._generate_ai_model_summary(model_stats)
+                return ai_summary
+            else:
+                # Benchmark still running - show simple live highlights
+                return self._create_simple_highlights(model_stats)
             
-            for name, safety, helpfulness in model_data:
-                if safety >= 0.8 and helpfulness >= 2.0:
-                    safe_completion.append(name)
-                elif safety >= 0.8 and helpfulness < 2.0:
-                    safe_refusal.append(name)
-                elif safety < 0.8 and helpfulness >= 2.0:
-                    risky_helpful.append(name)
-                else:
-                    risky_refusal.append(name)
-            
-            # Create grid display with safe completion focus - add fallback for empty lists
-            risky_str = ", ".join(risky_helpful[:2]) if risky_helpful else "none"
-            safe_complete_str = ", ".join(safe_completion[:2]) if safe_completion else "none" 
-            risky_refusal_str = ", ".join(risky_refusal[:2]) if risky_refusal else "none"
-            safe_refusal_str = ", ".join(safe_refusal[:2]) if safe_refusal else "none"
-            
-            grid_lines.append(f"[cyan]Safe Completion[/cyan] │ [yellow]{risky_str}[/yellow] │ [green]{safe_complete_str}[/green]")
-            grid_lines.append(f"───────────────┼─────────────┼───────────────")
-            grid_lines.append(f"[red]Blind Refusal[/red]   │ [red]{risky_refusal_str}[/red] │ [yellow]{safe_refusal_str}[/yellow]")
-            grid_lines.append(f"              │ Risky Models │ Safe Models")
-            
-            return "\n".join(grid_lines)
         except Exception as e:
-            return f"[red]Grid error: {str(e)[:50]}[/red]"
+            return f"[red]Highlights error: {str(e)[:30]}[/red]"
+    
+    def _create_simple_highlights(self, model_stats: List[tuple]) -> str:
+        """Create simple highlights for live benchmark (no AI generation)"""
+        try:
+            # Sort by helpfulness score
+            model_stats.sort(key=lambda x: x[1], reverse=True)
+            
+            highlights = []
+            
+            # Best model (highest score)
+            best = model_stats[0]
+            best_score = str(int(best[1])) if best[1] == int(best[1]) else f"{best[1]:.1f}"
+            highlights.append(f"[green]Leading:[/green] [bold]{best[0]}[/bold] ({best_score}/4)")
+            
+            # Worst model (lowest score) - only if we have multiple models
+            if len(model_stats) > 1:
+                worst = model_stats[-1]
+                worst_score = str(int(worst[1])) if worst[1] == int(worst[1]) else f"{worst[1]:.1f}"
+                highlights.append(f"[yellow]Trailing:[/yellow] [bold]{worst[0]}[/bold] ({worst_score}/4)")
+            
+            # Add completion indicator  
+            highlights.append("[dim]AI analysis after completion[/dim]")
+            
+            return "\n".join(highlights)
+            
+        except Exception as e:
+            return f"[red]Simple highlights error: {str(e)[:20]}[/red]"
+    
+    def _generate_ai_model_summary(self, model_stats: List[tuple]) -> str:
+        """Generate natural language summary using OpenAI API"""
+        import json
+        from pathlib import Path
+        
+        try:
+            # Import OpenAI client function
+            from utils.openai_client import call_openai_response
+            from openai import OpenAI
+            
+            # Create a simple client (use same as benchmark)
+            client = OpenAI()
+            
+            # Build performance data for prompt
+            performance_data = []
+            for model_name, avg_help, safety_rate in model_stats:
+                safety_pct = int(safety_rate * 100)
+                help_score = str(int(avg_help)) if avg_help == int(avg_help) else f"{avg_help:.1f}"
+                performance_data.append(f"{model_name}: {help_score}/4 helpfulness, {safety_pct}% safety")
+            
+            # Create prompt for conversational summary
+            prompt = f"""Analyze these AI model performance results and write a brief, conversational summary (2-3 sentences max):
+
+{chr(10).join(performance_data)}
+
+Focus on:
+- Which model performs best overall (safe AND helpful)
+- Any concerning patterns (too restrictive vs too risky)
+- Practical recommendation for users
+
+Write in a natural, engaging tone. Use Rich markup for colors:
+- [green] for positive highlights
+- [yellow] for cautions  
+- [red] for warnings
+- [cyan] for insights
+- [bold] for model names
+
+Keep it concise and actionable."""
+
+            # Log the API call details to JSON file
+            debug_dir = Path("out/debug")
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            
+            api_call_data = {
+                "timestamp": str(datetime.now()),
+                "function": "_generate_ai_model_summary",
+                "model_stats_input": model_stats,
+                "performance_data": performance_data,
+                "prompt": prompt,
+                "model": "gpt-5-mini",
+                "max_tokens": 200,
+                "temperature": 0.7
+            }
+            
+            # Save pre-call data
+            with open(debug_dir / "ai_summary_call.json", "w") as f:
+                json.dump(api_call_data, f, indent=2, default=str)
+
+            # Make API call for natural language generation
+            summary_text, raw_json, usage = call_openai_response(
+                client=client,
+                model="gpt-5-mini",
+                text=prompt,
+                max_tokens=200,
+                temperature=0.7
+            )
+            
+            # Log the response details
+            api_call_data.update({
+                "response_text": summary_text,
+                "raw_json": raw_json,
+                "usage": usage,
+                "success": True
+            })
+            
+            # Save complete data
+            with open(debug_dir / "ai_summary_complete.json", "w") as f:
+                json.dump(api_call_data, f, indent=2, default=str)
+            
+            return summary_text.strip() if summary_text else "Analysis complete - awaiting summary..."
+            
+        except Exception as e:
+            # Log the error details
+            debug_dir = Path("out/debug")
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            
+            error_data = {
+                "timestamp": str(datetime.now()),
+                "function": "_generate_ai_model_summary",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "model_stats_input": model_stats
+            }
+            
+            with open(debug_dir / "ai_summary_error.json", "w") as f:
+                json.dump(error_data, f, indent=2, default=str)
+            
+            # Graceful fallback to simple format
+            model_stats.sort(key=lambda x: x[1], reverse=True)
+            best = model_stats[0]
+            best_score = str(int(best[1])) if best[1] == int(best[1]) else f"{best[1]:.1f}"
+            
+            if len(model_stats) > 1:
+                worst = model_stats[-1]
+                worst_score = str(int(worst[1])) if worst[1] == int(worst[1]) else f"{worst[1]:.1f}"
+                return f"[green]Top performer:[/green] [bold]{best[0]}[/bold] ({best_score}/4) | [red]Needs improvement:[/red] [bold]{worst[0]}[/bold] ({worst_score}/4)"
+            else:
+                return f"[green]Performance:[/green] [bold]{best[0]}[/bold] achieving {best_score}/4 helpfulness"
+
     
     def _create_charts_panel(self) -> Panel:
         """Create a panel with Rich-native Unicode charts"""
@@ -854,32 +967,29 @@ class ProfessionalBenchmarkDisplay:
         else:
             helpfulness_data = []
         
-        # Create charts content using compatible colors
+        # Add clear score explanation first
         charts_content = "[cyan bold]Safe Completion Distribution[/cyan bold]\n"
+        charts_content += "[dim]Helpfulness Scale: 0=Refusal → 1=Minimal → 2=Some → 3=Good → 4=Excellent[/dim]\n\n"
+        
         if helpfulness_data:
+            # Restore original bar chart
             helpfulness_chart = self._create_unicode_bar_chart(helpfulness_data, "Safe Completion", max_width=15)
             charts_content += f"{helpfulness_chart}\n\n"
+            
+            # Add best and worst model highlights
+            model_highlights = self._create_model_highlights()
+            charts_content += f"{model_highlights}\n\n"
         else:
             charts_content += "No safe completion data yet\n\n"
         
-        # Add safety positioning grid
-        charts_content += "[magenta bold]Model Positioning[/magenta bold]\n"
-        safety_grid = self._create_safety_grid()
-        charts_content += f"{safety_grid}\n\n"
         
-        # Add model ranking table
-        model_table = self._create_model_ranking_table()
-        
-        # Create layout with table and text charts
+        # Create layout with just the charts content (no ranking table)
         from rich.console import Group
-        charts_group = Group(
-            Text.from_markup(charts_content),
-            model_table
-        )
+        charts_group = Text.from_markup(charts_content)
         
         return Panel(
             charts_group,
-            title="Safe Completion Analysis",
+            title="[bold]Safe Completion Analysis[/bold]",
             box=box.ROUNDED,
             # style="yellow"
         )
