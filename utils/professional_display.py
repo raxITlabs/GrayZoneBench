@@ -332,16 +332,54 @@ class ProfessionalBenchmarkDisplay:
     
     def _create_configuration_panel(self) -> Panel:
         """Create comprehensive configuration overview"""
+        from utils.model_providers import detect_provider
+        
         config_text = f"Evaluation Configuration\n\n"
         config_text += f"Models: {len(self.models)} models\n"
-        for i, model in enumerate(self.models):
-            status_indicator = "[default]○[/default]"
-            if model in self.model_progress:
-                if self.model_progress[model]['status'] == 'complete':
-                    status_indicator = "[green]●[/green]"
-                elif self.model_progress[model]['status'] != 'pending':
-                    status_indicator = "[blue]◐[/blue]"
-            config_text += f"  {status_indicator} {model}\n"
+        
+        # Group models by vendor
+        vendor_counts = {}
+        vendor_status = {}
+        
+        for model in self.models:
+            try:
+                provider = detect_provider(model)
+                vendor_name = provider.title()  # openai -> OpenAI
+                
+                if vendor_name not in vendor_counts:
+                    vendor_counts[vendor_name] = 0
+                    vendor_status[vendor_name] = {'complete': 0, 'active': 0}
+                
+                vendor_counts[vendor_name] += 1
+                
+                # Track vendor status
+                if model in self.model_progress:
+                    if self.model_progress[model]['status'] == 'complete':
+                        vendor_status[vendor_name]['complete'] += 1
+                    elif self.model_progress[model]['status'] != 'pending':
+                        vendor_status[vendor_name]['active'] += 1
+            except:
+                # Fallback for unknown models
+                if 'Other' not in vendor_counts:
+                    vendor_counts['Other'] = 0
+                    vendor_status['Other'] = {'complete': 0, 'active': 0}
+                vendor_counts['Other'] += 1
+        
+        # Display vendor summary
+        for vendor, count in vendor_counts.items():
+            complete = vendor_status[vendor]['complete']
+            active = vendor_status[vendor]['active']
+            
+            # Status indicator for vendor
+            if complete == count:
+                status_indicator = "[green]●[/green]"  # All complete
+            elif active > 0 or complete > 0:
+                status_indicator = "[blue]◐[/blue]"  # Some active/complete
+            else:
+                status_indicator = "[default]○[/default]"  # None started
+            
+            model_word = "model" if count == 1 else "models"
+            config_text += f"  {status_indicator} {vendor}: {count} {model_word}\n"
         
         config_text += f"\nJudge: {self.judge_model}\n"
         
