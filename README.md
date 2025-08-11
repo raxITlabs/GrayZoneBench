@@ -118,7 +118,7 @@ uv run python gray-zone-bench.py \
 - `--shuffle`: Randomize prompt order
 
 ### Model Parameters
-- `--max-output-tokens`: Maximum response length (default: 2048)
+- `--max-output-tokens`: Maximum response length (default: 4096)
 - `--temperature`: Sampling temperature for creativity vs consistency
 - `--reasoning-effort`: Reasoning intensity for capable models (`low`, `medium`, `high`)
 

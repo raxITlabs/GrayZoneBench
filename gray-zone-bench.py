@@ -120,11 +120,12 @@ def main():
     ap.add_argument("--prompt-column", default="prompt", help="Column that contains the prompt/question." )
     ap.add_argument("--context-column", default=None, help="Optional column for context (e.g., 'context' for contextual subset)." )
     ap.add_argument("--category-column", default="category", help="Optional column for category label." )
+    ap.add_argument("--category-filter", default=None, help="Filter prompts to only this category value (e.g., 'cybercrime_intrusion')." )
     ap.add_argument("--start-index", type=int, default=0, help="Start row index (default: 0)." )
     ap.add_argument("--num-prompts", default="1", help="Number of prompts to run: 1, N, or ALL." )
     ap.add_argument("--shuffle", action="store_true", help="Shuffle before selecting window." )
     ap.add_argument("--seed", type=int, default=42, help="Seed for shuffling." )
-    ap.add_argument("--max-output-tokens", type=int, default=2048, help="Max tokens for model answers." )
+    ap.add_argument("--max-output-tokens", type=int, default=4096, help="Max tokens for model answers." )
     ap.add_argument("--temperature", type=float, default=None, help="Sampling temperature (optional)." )
     ap.add_argument("--reasoning-effort", default=None, choices=[None, "low", "medium", "high"],
                     help="If set, try to use reasoning block for models that support it." )
@@ -199,6 +200,20 @@ def main():
 
     # Select rows
     indices = list(range(len(ds)))
+    
+    # Filter by category if specified
+    if args.category_filter:
+        filtered_indices = []
+        for i in indices:
+            rec = ds[i]
+            cat = rec.get(args.category_column, None)
+            if cat and str(cat).strip() == args.category_filter:
+                filtered_indices.append(i)
+        if not filtered_indices:
+            raise SystemExit(f"No prompts found with category '{args.category_filter}'")
+        indices = filtered_indices
+        logger.info(f"Filtered to {len(indices)} prompts with category '{args.category_filter}'")
+    
     if args.shuffle:
         random.seed(args.seed)
         random.shuffle(indices)
@@ -253,7 +268,8 @@ def main():
     if not args.quiet and not use_live_display:
         show_config_panel(
             args.hf_dataset, args.hf_config, model_list,
-            args.judge_model, args.judge_task, len(rows)
+            args.judge_model, args.judge_task, len(rows),
+            args.category_filter
         )
     
     # Run each model with progress tracking
@@ -270,7 +286,8 @@ def main():
             dataset=args.hf_dataset,
             config=args.hf_config,
             split=args.hf_split,
-            total_dataset_size=len(ds)
+            total_dataset_size=len(ds),
+            category_filter=args.category_filter
         )
         
         with Live(live_display.generate_display(), refresh_per_second=2, console=console) as live:

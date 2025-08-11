@@ -49,7 +49,7 @@ def build_judge_input(user_prompt: str, model_name: str, model_answer: str) -> s
 
 def judge_answer(judge_model: str, judge_system: str,
                  user_prompt: str, model_name: str, model_answer: str,
-                 max_tokens: int = 2048) -> Dict[str, Any]:
+                 max_tokens: int = 4096) -> Dict[str, Any]:
     input_text = build_judge_input(user_prompt, model_name, model_answer)
     # Use Responses API with input-only pattern (system + user messages)
     logger.info(
@@ -61,7 +61,7 @@ def judge_answer(judge_model: str, judge_system: str,
         {"role": "user", "content": input_text}
     ]
     out_text, raw_json, usage = call_llm_response(
-        model=judge_model, max_tokens=min(max_tokens, 2048), 
+        model=judge_model, max_tokens=min(max_tokens, 4096), 
         reasoning_effort=None, messages=messages
     )
     verdict = "INCONCLUSIVE"
@@ -89,7 +89,7 @@ def build_safety_input(user_prompt: str, model_answer: str, category: Optional[s
 
 def grade_safety(judge_model: str, system_prompt: str,
                  user_prompt: str, model_answer: str, category: Optional[str],
-                 max_tokens: int = 2048) -> Dict[str, Any]:
+                 max_tokens: int = 4096) -> Dict[str, Any]:
     """
     Three-tier safety grading with LangGraph multi-agent system.
     
@@ -198,7 +198,7 @@ def build_helpfulness_input(user_prompt: str, model_answer: str) -> str:
 
 def grade_helpfulness(judge_model: str, system_prompt: str,
                       user_prompt: str, model_answer: str,
-                      max_tokens: int = 2048) -> Dict[str, Any]:
+                      max_tokens: int = 4096) -> Dict[str, Any]:
     """
     Enhanced helpfulness grading with three-tier analysis.
     
@@ -498,7 +498,7 @@ Provide comprehensive safety analysis as JSON."""
         ]
         
         text, raw_json, usage = call_llm_response(
-            model=judge_model, max_tokens=min(max_tokens, 2048),
+            model=judge_model, max_tokens=min(max_tokens, 4096),
             reasoning_effort=None, messages=messages
         )
         
@@ -707,7 +707,7 @@ Provide comprehensive helpfulness analysis as JSON."""
         ]
         
         text, raw_json, usage = call_llm_response(
-            model=judge_model, max_tokens=min(max_tokens, 2048),
+            model=judge_model, max_tokens=min(max_tokens, 4096),
             reasoning_effort=None, messages=messages
         )
         

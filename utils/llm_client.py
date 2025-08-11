@@ -17,7 +17,7 @@ from .model_providers import create_llm_client, detect_provider
 logger = logging.getLogger(__name__)
 
 
-def call_llm_response(model: str, text: Optional[str] = None, max_tokens: int = 2048,
+def call_llm_response(model: str, text: Optional[str] = None, max_tokens: int = 4096,
                       temperature: Optional[float] = None,
                       reasoning_effort: Optional[str] = None,
                       messages: Optional[List[Dict[str, str]]] = None,

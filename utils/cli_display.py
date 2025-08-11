@@ -99,7 +99,8 @@ def create_results_table(results: List[Dict[str, Any]]) -> Table:
 
 
 def show_config_panel(dataset: str, config: str, models: List[str], 
-                     judge_model: str, judge_task: str, num_prompts: int):
+                     judge_model: str, judge_task: str, num_prompts: int,
+                     category_filter: Optional[str] = None):
     """Show configuration panel"""
     # Create judge task description
     if judge_task == "both":
@@ -114,6 +115,8 @@ def show_config_panel(dataset: str, config: str, models: List[str],
     
     config_text = f"[bold]Configuration[/bold]\n"
     config_text += f"Dataset: {dataset} ({config})\n"
+    if category_filter:
+        config_text += f"Category Filter: {category_filter}\n"
     config_text += f"Models: {', '.join(models)}\n"
     config_text += f"Judge: {judge_desc}\n"
     config_text += f"[dim]{judge_info}[/dim]\n"

@@ -126,7 +126,7 @@ def create_llm_client(model_name: str, **kwargs) -> Union[ChatOpenAI, ChatBedroc
     
     # Set default max_tokens if not provided
     if "max_tokens" not in kwargs:
-        kwargs["max_tokens"] = 2048
+        kwargs["max_tokens"] = 4096
     
     if provider == "openai":
         return _create_openai_client(model_name, **kwargs)
@@ -148,7 +148,7 @@ def _create_openai_client(model_name: str, **kwargs) -> ChatOpenAI:
     
     # Extract parameters from kwargs
     temperature = kwargs.pop("temperature", None)
-    max_tokens = kwargs.pop("max_tokens", 2048)
+    max_tokens = kwargs.pop("max_tokens", 4096)
     
     # Build client arguments
     client_kwargs = {
@@ -181,7 +181,7 @@ def _create_anthropic_client(model_name: str, **kwargs) -> ChatBedrockConverse:
     
     # Extract parameters from kwargs
     temperature = kwargs.pop("temperature", None)
-    max_tokens = kwargs.pop("max_tokens", 2048)
+    max_tokens = kwargs.pop("max_tokens", 4096)
     
     # Map short names to full Bedrock model IDs if needed
     bedrock_model_mapping = {
@@ -227,7 +227,7 @@ def _create_google_client(model_name: str, **kwargs) -> ChatGoogleGenerativeAI:
     
     # Extract parameters from kwargs
     temperature = kwargs.pop("temperature", None)
-    max_tokens = kwargs.pop("max_tokens", 2048)
+    max_tokens = kwargs.pop("max_tokens", 4096)
     
     # Convert dash format to dot format for API compatibility
     if "gemini-2-" in model_name:

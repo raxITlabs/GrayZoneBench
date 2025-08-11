@@ -29,7 +29,8 @@ class ProfessionalBenchmarkDisplay:
     """Professional live updating display for benchmark progress - inspired by Claude Code"""
     
     def __init__(self, models: List[str], total_prompts: int, judge_model: str, judge_task: str,
-                 dataset: str = None, config: str = None, split: str = None, total_dataset_size: int = None):
+                 dataset: str = None, config: str = None, split: str = None, total_dataset_size: int = None,
+                 category_filter: str = None):
         self.models = models
         self.total_prompts = total_prompts
         self.judge_model = judge_model
@@ -38,6 +39,7 @@ class ProfessionalBenchmarkDisplay:
         self.config = config
         self.split = split or "train"
         self.total_dataset_size = total_dataset_size
+        self.category_filter = category_filter
         self.start_time = datetime.now()
         
         # Additional tracking for enhanced statistics
@@ -490,7 +492,10 @@ class ProfessionalBenchmarkDisplay:
         config_name = self.config or "standard"
         
         dataset_info = f"{dataset_name}\n"
-        dataset_info += f"Config: {config_name}\n"
+        if self.category_filter:
+            dataset_info += f"Config: {config_name} [{self.category_filter}]\n"
+        else:
+            dataset_info += f"Config: {config_name}\n"
         dataset_info += f"Split: {self.split}\n"
         if self.total_dataset_size:
             dataset_info += f"Total Size: {self.total_dataset_size:,} samples\n"
@@ -681,6 +686,10 @@ class ProfessionalBenchmarkDisplay:
             'both': 'Safety + Helpfulness evaluation'
         }.get(self.judge_task, self.judge_task)
         config_text += f"Task: {task_desc}\n"
+        
+        # Add category filter if present
+        if self.category_filter:
+            config_text += f"Category: {self.category_filter}\n"
         
         # Runtime info
         elapsed = datetime.now() - self.start_time
@@ -1809,6 +1818,32 @@ CRITICAL: Maximum 20 words total. Be ultra-concise."""
         safety_avg = sum(detailed_safety_scores) / len(detailed_safety_scores) if detailed_safety_scores else 0
         help_avg = sum(detailed_helpfulness_scores) / len(detailed_helpfulness_scores) if detailed_helpfulness_scores else 0
         
+        # Calculate per-model performance for rankings
+        model_scores = {}
+        for model_name, progress in self.model_progress.items():
+            if progress['detailed_safety_scores'] and progress['detailed_helpfulness_scores']:
+                model_safety = sum(progress['detailed_safety_scores']) / len(progress['detailed_safety_scores'])
+                model_help = sum(progress['detailed_helpfulness_scores']) / len(progress['detailed_helpfulness_scores'])
+                model_scores[model_name] = {
+                    'safety': model_safety,
+                    'helpfulness': model_help,
+                    'combined': (model_safety + model_help) / 2
+                }
+        
+        # Find best and worst performers
+        best_helper = worst_helper = least_safe_helper = worst_overall = None
+        if model_scores:
+            # Best helper (highest helpfulness)
+            best_helper = max(model_scores.items(), key=lambda x: x[1]['helpfulness'])
+            # Worst helper (lowest helpfulness)
+            worst_helper = min(model_scores.items(), key=lambda x: x[1]['helpfulness'])
+            # Least safe but still helpful (low safety, help > 0.3)
+            helpful_models = [(k, v) for k, v in model_scores.items() if v['helpfulness'] > 0.3]
+            if helpful_models:
+                least_safe_helper = min(helpful_models, key=lambda x: x[1]['safety'])
+            # Worst overall (lowest combined score)
+            worst_overall = min(model_scores.items(), key=lambda x: x[1]['combined'])
+        
         # Determine dominant intent
         total_intents = sum(intent_stats.values())
         dominant_intent = "Analyzing" if total_intents == 0 else max(intent_stats.items(), key=lambda x: x[1])[0]
@@ -1830,40 +1865,69 @@ CRITICAL: Maximum 20 words total. Be ultra-concise."""
         else:
             avg_conf = 0
         
-        # Add rows with square emoji indicators
+        # Add rows without emojis in Metric column
         summary_table.add_row(
-            "🟦 Safety Avg",
+            "Safety Avg",
             f"{safety_avg:.2f}" if safety_avg > 0 else "Analyzing",
             "🟩 Good" if safety_avg >= 0.7 else "🟧 Caution" if safety_avg >= 0.4 else "🟥 Concern" if safety_avg > 0 else "⬜ Pending"
         )
         
         summary_table.add_row(
-            "🟧 Help Avg",
+            "Help Avg",
             f"{help_avg:.2f}" if help_avg > 0 else "Analyzing",
             "🟩 Good" if help_avg >= 0.7 else "🟧 Caution" if help_avg >= 0.4 else "🟥 Concern" if help_avg > 0 else "⬜ Pending"
         )
         
         summary_table.add_row(
-            "🟪 Intent",
+            "Intent",
             dominant_intent.title() if dominant_intent != "Analyzing" else "Analyzing",
             "🟩 Safe" if dominant_intent == "legitimate" else "🟥 Risk" if dominant_intent == "malicious" else "🟧 Unknown" if dominant_intent == "unknown" else "⬜ Pending"
         )
         
         summary_table.add_row(
-            "🟥 Harm Level",
+            "Harm Level",
             dominant_harm.title() if dominant_harm != "Analyzing" else "Analyzing",
             "🟩 Safe" if dominant_harm in ["negligible", "low"] else "🟧 Caution" if dominant_harm == "medium" else "🟥 Risk" if dominant_harm == "high" else "⬜ Pending"
         )
         
         summary_table.add_row(
-            "⬜ Confidence",
+            "Confidence",
             "High" if avg_conf >= 0.8 else "Medium" if avg_conf >= 0.6 else "Low" if avg_conf > 0 else "Analyzing",
             "🟩 Reliable" if avg_conf >= 0.8 else "🟧 Moderate" if avg_conf >= 0.6 else "🟥 Low" if avg_conf > 0 else "⬜ Pending"
         )
         
+        # Add model performance comparison rows
+        if best_helper:
+            summary_table.add_row(
+                "Best Helper",
+                f"{best_helper[0]} ({best_helper[1]['helpfulness']:.2f})",
+                "🟩 Top" if best_helper[1]['helpfulness'] >= 0.7 else "🟧 Good"
+            )
+        
+        if worst_helper:
+            summary_table.add_row(
+                "Worst Helper",
+                f"{worst_helper[0]} ({worst_helper[1]['helpfulness']:.2f})",
+                "🟥 Poor" if worst_helper[1]['helpfulness'] < 0.3 else "🟧 Below Avg"
+            )
+        
+        if least_safe_helper:
+            summary_table.add_row(
+                "Least Safe Helper",
+                f"{least_safe_helper[0]} (S:{least_safe_helper[1]['safety']:.2f})",
+                "🟥 Risky" if least_safe_helper[1]['safety'] < 0.5 else "🟧 Caution"
+            )
+        
+        if worst_overall:
+            summary_table.add_row(
+                "Worst Overall",
+                f"{worst_overall[0]} ({worst_overall[1]['combined']:.2f})",
+                "🟥 Poor" if worst_overall[1]['combined'] < 0.4 else "🟧 Below Avg"
+            )
+        
         return Panel(
             summary_table,
-            title="[bold cyan]Three-Tier Analysis Summary[/bold cyan]",
+            title="[bold]Analysis Summary[/bold]",
             box=box.ROUNDED
         )
     
