@@ -45,14 +45,35 @@ import json
 import os
 import random
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
+# Custom JSON encoder to handle ScoreBreakdown objects
+class ScoreBreakdownEncoder(json.JSONEncoder):
+    def default(self, obj):
+        # Handle ScoreBreakdown and other dataclass objects
+        if hasattr(obj, '__dataclass_fields__'):
+            return asdict(obj)
+        # Handle enum objects
+        if hasattr(obj, 'value'):
+            return obj.value
+        return super().default(obj)
+
+def format_score(value, default='N/A'):
+    """Format a score value with 3 decimal places, handling non-numeric values."""
+    if isinstance(value, (int, float)):
+        return f"{value:.3f}"
+    return str(value if value is not None else default)
+
 # 3rd party (install via uv/pip): openai, datasets, rich
 from datasets import load_dataset
-from openai import OpenAI
+# OpenAI import removed - now using unified LLM client
 
 # Rich for beautiful CLI output
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -63,11 +84,14 @@ from rich.live import Live
 # Import utilities
 from utils import (
     create_results_table, show_config_panel, show_completion_panel,
-    call_openai_response, grade_safety, grade_helpfulness, judge_answer,
+    judge_answer,
     DEFAULT_JUDGE_SYSTEM, DEFAULT_SAFETY_GRADER_SYSTEM, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
     PromptRow, normalize_models_arg, build_prompt_text,
     ensure_dir, now_iso
 )
+# Import enhanced three-tier judge functions
+from utils.judge import grade_safety, grade_helpfulness
+from utils.llm_client import call_llm_response
 from utils.cli_display import console
 from utils.professional_display import ProfessionalBenchmarkDisplay
 
@@ -88,7 +112,7 @@ def main():
     ap.add_argument("--models", nargs="+", required=True,
                     help="Space- or comma-separated list of model names (e.g., 'gpt-5-mini o4-mini' or 'gpt-5-mini,o4-mini').")
     ap.add_argument("--judge-model", required=True, help="Model to use as the judge (e.g., gpt-5-mini)." )
-    ap.add_argument("--judge-task", default="safety", choices=["safety", "helpfulness", "both"],
+    ap.add_argument("--judge-task", default="both", choices=["safety", "helpfulness", "both"],
                     help="What to grade with the judge model: safety, helpfulness, or both.")
     ap.add_argument("--hf-dataset", default="walledai/HarmBench", help="HF dataset name." )
     ap.add_argument("--hf-config", default="standard", help="HF config/subset (e.g., standard, contextual, copyright)." )
@@ -96,18 +120,19 @@ def main():
     ap.add_argument("--prompt-column", default="prompt", help="Column that contains the prompt/question." )
     ap.add_argument("--context-column", default=None, help="Optional column for context (e.g., 'context' for contextual subset)." )
     ap.add_argument("--category-column", default="category", help="Optional column for category label." )
+    ap.add_argument("--category-filter", default=None, help="Filter prompts to only this category value (e.g., 'cybercrime_intrusion')." )
     ap.add_argument("--start-index", type=int, default=0, help="Start row index (default: 0)." )
     ap.add_argument("--num-prompts", default="1", help="Number of prompts to run: 1, N, or ALL." )
     ap.add_argument("--shuffle", action="store_true", help="Shuffle before selecting window." )
     ap.add_argument("--seed", type=int, default=42, help="Seed for shuffling." )
-    ap.add_argument("--max-output-tokens", type=int, default=2048, help="Max tokens for model answers." )
+    ap.add_argument("--max-output-tokens", type=int, default=4096, help="Max tokens for model answers." )
     ap.add_argument("--temperature", type=float, default=None, help="Sampling temperature (optional)." )
     ap.add_argument("--reasoning-effort", default=None, choices=[None, "low", "medium", "high"],
                     help="If set, try to use reasoning block for models that support it." )
     ap.add_argument("--base-url", default=None, help="Optional OpenAI base_url override." )
     ap.add_argument("--api-key", default=None, help="Override OPENAI_API_KEY for this run." )
     ap.add_argument("--judge-system-file", default=None, help="Path to a custom judge system prompt (optional)." )
-    ap.add_argument("--verbose", "-v", action="store_true",
+    ap.add_argument("--info", "-i", action="store_true",
                     help="Show detailed processing information.")
     ap.add_argument("--debug", action="store_true",
                     help="Show debug information and full tracebacks.")
@@ -124,7 +149,7 @@ def main():
     elif args.debug:
         log_level = logging.DEBUG
         console_log_level = logging.DEBUG
-    elif args.verbose:
+    elif args.info:
         log_level = logging.INFO
         console_log_level = logging.INFO
     else:
@@ -143,13 +168,27 @@ def main():
     if not model_list:
         raise SystemExit("No models provided via --models")
 
-    # OpenAI client
-    client_kwargs = {}
-    if args.base_url:
-        client_kwargs["base_url"] = args.base_url
-    if args.api_key:
-        client_kwargs["api_key"] = args.api_key
-    client = OpenAI(**client_kwargs)
+    # Model validation - check if all models are supported
+    from utils.model_providers import validate_model_support, get_supported_models
+    
+    unsupported_models = [model for model in model_list if not validate_model_support(model)]
+    if unsupported_models:
+        supported = get_supported_models()
+        print(f"\n❌ Unsupported models: {', '.join(unsupported_models)}")
+        print(f"\n✅ Supported models by provider:")
+        for provider, models in supported.items():
+            print(f"  {provider.upper()}: {', '.join(models[:5])}{'...' if len(models) > 5 else ''}")
+        return
+    
+    # Legacy arguments handling (base_url and api_key are now handled per-provider)
+    if args.base_url or args.api_key:
+        logger.warning(
+            "--base-url and --api-key arguments are deprecated in multi-provider mode. "
+            "Use provider-specific environment variables instead:"
+            "\n  OpenAI: OPENAI_API_KEY"
+            "\n  Anthropic: AWS_PROFILE (or AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY), AWS_REGION"
+            "\n  Google: GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION"
+        )
 
     # Load judge system prompt
     judge_system = DEFAULT_JUDGE_SYSTEM
@@ -161,6 +200,20 @@ def main():
 
     # Select rows
     indices = list(range(len(ds)))
+    
+    # Filter by category if specified
+    if args.category_filter:
+        filtered_indices = []
+        for i in indices:
+            rec = ds[i]
+            cat = rec.get(args.category_column, None)
+            if cat and str(cat).strip() == args.category_filter:
+                filtered_indices.append(i)
+        if not filtered_indices:
+            raise SystemExit(f"No prompts found with category '{args.category_filter}'")
+        indices = filtered_indices
+        logger.info(f"Filtered to {len(indices)} prompts with category '{args.category_filter}'")
+    
     if args.shuffle:
         random.seed(args.seed)
         random.shuffle(indices)
@@ -199,23 +252,24 @@ def main():
         fh.setLevel(log_level)  # Use the file log level
         fh.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s"))
         logging.getLogger().addHandler(fh)
-        if args.verbose or args.debug:
+        if args.info or args.debug:
             console.print(f"[dim]Detailed logs: {log_path}[/dim]")
     except Exception as e:
-        if args.verbose or args.debug:
+        if args.info or args.debug:
             console.print(f"[yellow]Warning: Failed to set up file logging: {e}[/yellow]")
 
     # Track start time for elapsed time display
     start_time = datetime.now()
     
     # Choose display mode based on verbosity
-    use_live_display = not (args.debug or args.verbose or args.quiet)
+    use_live_display = not (args.debug or args.info or args.quiet)
     
     # Show setup configuration (skip setup panel if using live display)
     if not args.quiet and not use_live_display:
         show_config_panel(
             args.hf_dataset, args.hf_config, model_list,
-            args.judge_model, args.judge_task, len(rows)
+            args.judge_model, args.judge_task, len(rows),
+            args.category_filter
         )
     
     # Run each model with progress tracking
@@ -230,7 +284,10 @@ def main():
             judge_model=args.judge_model,
             judge_task=args.judge_task,
             dataset=args.hf_dataset,
-            config=args.hf_config
+            config=args.hf_config,
+            split=args.hf_split,
+            total_dataset_size=len(ds),
+            category_filter=args.category_filter
         )
         
         with Live(live_display.generate_display(), refresh_per_second=2, console=console) as live:
@@ -249,8 +306,8 @@ def main():
                     
                     # Process the prompt (same logic as before)
                     try:
-                        answer_text, raw_json, usage = call_openai_response(
-                            client, model=model, text=prompt_text, max_tokens=args.max_output_tokens,
+                        answer_text, raw_json, usage = call_llm_response(
+                            model=model, text=prompt_text, max_tokens=args.max_output_tokens,
                             temperature=args.temperature, reasoning_effort=args.reasoning_effort
                         )
                         status = "ok"
@@ -271,7 +328,7 @@ def main():
                             live_display.update_progress(model, prompt_info, 'judging_safety')
                             live.update(live_display.generate_display())
                             
-                            j_safety = grade_safety(client, args.judge_model, DEFAULT_SAFETY_GRADER_SYSTEM,
+                            j_safety = grade_safety(args.judge_model, DEFAULT_SAFETY_GRADER_SYSTEM,
                                                     prompt_text, answer_text, row.category)
                             j["safety"] = j_safety
                         if args.judge_task in {"helpfulness", "both"}:
@@ -279,11 +336,11 @@ def main():
                             live_display.update_progress(model, prompt_info, 'judging_helpfulness')
                             live.update(live_display.generate_display())
                             
-                            j_help = grade_helpfulness(client, args.judge_model, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
+                            j_help = grade_helpfulness(args.judge_model, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
                                                        prompt_text, answer_text)
                             j["helpfulness"] = j_help
                         if not j:
-                            j = judge_answer(client, args.judge_model, judge_system, prompt_text, model, answer_text)
+                            j = judge_answer(args.judge_model, judge_system, prompt_text, model, answer_text)
                     except Exception as e:
                         if not j:
                             j = {"verdict": "INCONCLUSIVE", "rationale": f"judge_error: {e}", "raw": {}, "usage": {}}
@@ -314,7 +371,7 @@ def main():
                             judge_raw_data["legacy_raw"] = j["raw"]
                         if not judge_raw_data:
                             judge_raw_data = j
-                        (model_dir / f"{uid}.judge.response.json").write_text(json.dumps(judge_raw_data, indent=2), encoding="utf-8")
+                        (model_dir / f"{uid}.judge.response.json").write_text(json.dumps(judge_raw_data, indent=2, cls=ScoreBreakdownEncoder), encoding="utf-8")
                     except Exception as e:
                         logger.debug("Failed to write judge raw JSON for %s: %s", uid, e)
                     
@@ -340,6 +397,46 @@ def main():
                         *( [f"- Helpfulness: {j.get('helpfulness',{}).get('score','N/A')}"] if isinstance(j.get('helpfulness'), dict) else [] ),
                         *( [f"- Verdict: **{j.get('verdict','INCONCLUSIVE')}**"] if 'verdict' in j else [] ),
                     ]
+                    
+                    # Add detailed analysis results to markdown (always enabled)
+                    if True:  # Always show detailed analysis
+                        safety_data = j.get("safety", {}) or {}
+                        helpfulness_data = j.get("helpfulness", {}) or {}
+                        
+                        if safety_data.get("detailed_safety_score") is not None:
+                            md.extend([
+                                "",
+                                "### Detailed Analysis",
+                                f"- **Safety Score**: {format_score(safety_data.get('detailed_safety_score'))} (confidence: {format_score(safety_data.get('confidence'))})",
+                                f"- **Helpfulness Score**: {format_score(helpfulness_data.get('detailed_helpfulness_score'))} (confidence: {format_score(helpfulness_data.get('confidence'))})",
+                            ])
+                            
+                            if safety_data.get("rationale"):
+                                md.extend([
+                                    "",
+                                    "**Safety Rationale:**",
+                                    safety_data["rationale"]
+                                ])
+                            
+                            if helpfulness_data.get("rationale"):
+                                md.extend([
+                                    "",
+                                    "**Helpfulness Rationale:**",
+                                    helpfulness_data["rationale"]
+                                ])
+                            
+                            # Add tier usage summary
+                            safety_tiers = safety_data.get("tier_results", {})
+                            helpfulness_tiers = helpfulness_data.get("tier_results", {})
+                            if safety_tiers or helpfulness_tiers:
+                                md.extend([
+                                    "",
+                                    "**Evaluation Tiers Used:**",
+                                    f"- Deterministic: {bool(safety_tiers.get('deterministic') or helpfulness_tiers.get('deterministic'))}",
+                                    f"- Moderation: {bool(safety_tiers.get('moderation') or helpfulness_tiers.get('moderation'))}",
+                                    f"- Agent: {bool(safety_tiers.get('agent') or helpfulness_tiers.get('agent'))}"
+                                ])
+                    
                     (model_dir / f"{uid}.md").write_text("\n".join(md), encoding="utf-8")
                     
                     result_item = {
@@ -350,16 +447,32 @@ def main():
                         "verdict": j.get("verdict", None),
                         "safety": (j.get("safety", {}) or {}).get("label"),
                         "helpfulness": (j.get("helpfulness", {}) or {}).get("score"),
-                        "input_tokens": (record["usage"] or {}).get("input_tokens"),
-                        "output_tokens": (record["usage"] or {}).get("output_tokens"),
+                        "input_tokens": (record["usage"] or {}).get("input_tokens") or 0,
+                        "output_tokens": (record["usage"] or {}).get("output_tokens") or 0,
                     }
+                    
+                    # Add detailed analysis results (always enabled)
+                    if True:  # Always include detailed analysis
+                        safety_data = j.get("safety", {}) or {}
+                        helpfulness_data = j.get("helpfulness", {}) or {}
+                        
+                        result_item.update({
+                            "detailed_safety_score": safety_data.get("detailed_safety_score"),
+                            "detailed_helpfulness_score": helpfulness_data.get("detailed_helpfulness_score"),
+                            "safety_confidence": safety_data.get("confidence"),
+                            "helpfulness_confidence": helpfulness_data.get("confidence"),
+                            "safety_rationale": safety_data.get("rationale"),
+                            "helpfulness_rationale": helpfulness_data.get("rationale"),
+                            "safety_tier_results": safety_data.get("tier_results"),
+                            "helpfulness_tier_results": helpfulness_data.get("tier_results"),
+                        })
                     all_results.append(result_item)
                     
                     # Update live display with final result
                     live_display.update_progress(model, prompt_info, 'complete', result_item)
                     live.update(live_display.generate_display())
     else:
-        # Use simple progress bar for debug/verbose modes
+        # Use simple progress bar for debug/info modes
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -373,145 +486,203 @@ def main():
                 model_dir = root / model.replace("/", "_")
                 ensure_dir(model_dir)
 
-            for row in rows:
-                uid = f"row{row.idx:06d}"
-                prompt_text = build_prompt_text(row, include_context=bool(args.context_column))
-                
-                # Update progress description
-                progress.update(
-                    main_task, 
-                    description=f"Processing: {model} | {row.category} | #{row.idx}"
-                )
-                
-                if args.verbose:
-                    console.print(f"[dim]Processing {model} on prompt {row.idx} ({row.category})[/dim]")
-                elif args.debug:
-                    logger.info("Processing sample | model=%s uid=%s category=%s", model, uid, row.category)
-
-                # Call candidate model
-                try:
-                    answer_text, raw_json, usage = call_openai_response(
-                        client, model=model, text=prompt_text, max_tokens=args.max_output_tokens,
-                        temperature=args.temperature, reasoning_effort=args.reasoning_effort
-                    )
-                    status = "ok"
-                    err = None
-                    if args.debug:
-                        logger.debug(
-                            "Model call ok | model=%s uid=%s answer_chars=%s usage=%s",
-                            model, uid, len(answer_text or ""), usage or {},
-                        )
-                except Exception as e:
-                    answer_text, raw_json, usage = "", {}, {}
-                    # Classify the type of error
-                    if "400" in str(e) and "safety reasons" in str(e):
-                        status = "api_blocked"
-                        if args.verbose or args.debug:
-                            console.print(f"[yellow]API blocked: {model} on prompt {row.idx}[/yellow]")
-                        elif args.debug:
-                            logger.warning("Model blocked by API policy | model=%s uid=%s", model, uid)
-                    else:
-                        status = "error"
-                        if args.verbose or args.debug:
-                            console.print(f"[red]Error: {model} on prompt {row.idx}: {str(e)[:100]}...[/red]")
-                        elif args.debug:
-                            logger.exception("Model call error | model=%s uid=%s: %s", model, uid, e)
-                    err = str(e)
-
-                # Judge
-                j: Dict[str, Any] = {}
-                try:
-                    if args.judge_task in {"safety", "both"}:
-                        j_safety = grade_safety(client, args.judge_model, DEFAULT_SAFETY_GRADER_SYSTEM,
-                                                prompt_text, answer_text, row.category)
-                        j["safety"] = j_safety
-                    if args.judge_task in {"helpfulness", "both"}:
-                        j_help = grade_helpfulness(client, args.judge_model, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
-                                                   prompt_text, answer_text)
-                        j["helpfulness"] = j_help
-                    if not j:
-                        # Fallback to legacy verdict for backward compatibility
-                        j = judge_answer(client, args.judge_model, judge_system, prompt_text, model, answer_text)
-                except Exception as e:
-                    if args.debug:
-                        logger.exception("Judge error | model=%s uid=%s: %s", model, uid, e)
-                    elif args.verbose:
-                        console.print(f"[yellow]Judge error for {model} on prompt {row.idx}[/yellow]")
-                    if not j:
-                        j = {"verdict": "INCONCLUSIVE", "rationale": f"judge_error: {e}", "raw": {}, "usage": {}}
-
-                # Persist per-sample artifacts
-                record = {
-                    "timestamp": now_iso(),
-                    "hf_index": row.idx,
-                    "category": row.category,
-                    "model": model,
-                    "prompt": prompt_text,
-                    "answer": answer_text,
-                    "status": status,
-                    "error": err,
-                    "usage": usage,
-                    "judge": j,
-                }
-
-                # Raw JSON dump
-                (model_dir / f"{uid}.response.json").write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
-                # Judge raw JSON dump
-                try:
-                    # Build comprehensive judge raw data
-                    judge_raw_data = {}
-                    if isinstance(j.get("safety"), dict) and "raw" in j["safety"]:
-                        judge_raw_data["safety_raw"] = j["safety"]["raw"]
-                    if isinstance(j.get("helpfulness"), dict) and "raw" in j["helpfulness"]:
-                        judge_raw_data["helpfulness_raw"] = j["helpfulness"]["raw"]
-                    # Fallback for legacy single judge format
-                    if "raw" in j:
-                        judge_raw_data["legacy_raw"] = j["raw"]
-                    # If no raw data found, save the complete judge structure
-                    if not judge_raw_data:
-                        judge_raw_data = j
+                for row in rows:
+                    uid = f"row{row.idx:06d}"
+                    prompt_text = build_prompt_text(row, include_context=bool(args.context_column))
                     
-                    (model_dir / f"{uid}.judge.response.json").write_text(json.dumps(judge_raw_data, indent=2), encoding="utf-8")
-                except Exception as e:
-                    logger.debug("Failed to write judge raw JSON for %s: %s", uid, e)
-                # Markdown summary
-                md = [
-                    f"# HarmBench Sample {uid}",
-                    f"- Timestamp: {record['timestamp']}",
-                    f"- Model: `{model}`",
-                    f"- Category: {row.category}",
-                    f"- HF Index: {row.idx}",
-                    f"- Status: {status}",
-                    "",
-                    "## Prompt",
-                    "```",
-                    prompt_text,
-                    "```",
-                    "",
-                    "## Answer",
-                    answer_text or "_<empty>_" if status != "api_blocked" else "_<API blocked for safety reasons>_",
-                    "",
-                    "## Judge",
-                    *( [f"- Safety: {j.get('safety',{}).get('label','N/A')}"] if isinstance(j.get('safety'), dict) else [] ),
-                    *( [f"- Helpfulness: {j.get('helpfulness',{}).get('score','N/A')}"] if isinstance(j.get('helpfulness'), dict) else [] ),
-                    *( [f"- Verdict: **{j.get('verdict','INCONCLUSIVE')}**"] if 'verdict' in j else [] ),
-                ]
-                (model_dir / f"{uid}.md").write_text("\n".join(md), encoding="utf-8")
+                    # Update progress description
+                    progress.update(
+                        main_task, 
+                        description=f"Processing: {model} | {row.category} | #{row.idx}"
+                    )
+                    
+                    if args.info:
+                        console.print(f"[dim]Processing {model} on prompt {row.idx} ({row.category})[/dim]")
+                    elif args.debug:
+                        logger.info("Processing sample | model=%s uid=%s category=%s", model, uid, row.category)
 
-                all_results.append({
-                    "hf_index": row.idx,
-                    "category": row.category,
-                    "model": model,
-                    "status": status,
-                    "verdict": j.get("verdict", None),
-                    "safety": (j.get("safety", {}) or {}).get("label"),
-                    "helpfulness": (j.get("helpfulness", {}) or {}).get("score"),
-                    "input_tokens": (record["usage"] or {}).get("input_tokens"),
-                    "output_tokens": (record["usage"] or {}).get("output_tokens"),
-                })
-                
-                # Update progress
-                progress.update(main_task, advance=1)
+                    # Call candidate model
+                    try:
+                        answer_text, raw_json, usage = call_llm_response(
+                            model=model, text=prompt_text, max_tokens=args.max_output_tokens,
+                            temperature=args.temperature, reasoning_effort=args.reasoning_effort
+                        )
+                        status = "ok"
+                        err = None
+                        if args.debug:
+                            logger.debug(
+                                "Model call ok | model=%s uid=%s answer_chars=%s usage=%s",
+                                model, uid, len(answer_text or ""), usage or {},
+                            )
+                    except Exception as e:
+                        answer_text, raw_json, usage = "", {}, {}
+                        # Classify the type of error
+                        if "400" in str(e) and "safety reasons" in str(e):
+                            status = "api_blocked"
+                            if args.info or args.debug:
+                                console.print(f"[yellow]API blocked: {model} on prompt {row.idx}[/yellow]")
+                            elif args.debug:
+                                logger.warning("Model blocked by API policy | model=%s uid=%s", model, uid)
+                        else:
+                            status = "error"
+                            if args.info or args.debug:
+                                console.print(f"[red]Error: {model} on prompt {row.idx}: {str(e)[:100]}...[/red]")
+                            elif args.debug:
+                                logger.exception("Model call error | model=%s uid=%s: %s", model, uid, e)
+                        err = str(e)
+
+                    # Judge
+                    j: Dict[str, Any] = {}
+                    try:
+                        if args.judge_task in {"safety", "both"}:
+                            j_safety = grade_safety(args.judge_model, DEFAULT_SAFETY_GRADER_SYSTEM,
+                                                    prompt_text, answer_text, row.category)
+                            j["safety"] = j_safety
+                        if args.judge_task in {"helpfulness", "both"}:
+                            j_help = grade_helpfulness(args.judge_model, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
+                                                       prompt_text, answer_text)
+                            j["helpfulness"] = j_help
+                        if not j:
+                            # Fallback to legacy verdict for backward compatibility
+                            j = judge_answer(args.judge_model, judge_system, prompt_text, model, answer_text)
+                    except Exception as e:
+                        if args.debug:
+                            logger.exception("Judge error | model=%s uid=%s: %s", model, uid, e)
+                        elif args.info:
+                            console.print(f"[yellow]Judge error for {model} on prompt {row.idx}[/yellow]")
+                        if not j:
+                            j = {"verdict": "INCONCLUSIVE", "rationale": f"judge_error: {e}", "raw": {}, "usage": {}}
+
+                    # Persist per-sample artifacts
+                    record = {
+                        "timestamp": now_iso(),
+                        "hf_index": row.idx,
+                        "category": row.category,
+                        "model": model,
+                        "prompt": prompt_text,
+                        "answer": answer_text,
+                        "status": status,
+                        "error": err,
+                        "usage": usage,
+                        "judge": j,
+                    }
+
+                    # Raw JSON dump
+                    (model_dir / f"{uid}.response.json").write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
+                    # Judge raw JSON dump
+                    try:
+                        # Build comprehensive judge raw data
+                        judge_raw_data = {}
+                        if isinstance(j.get("safety"), dict) and "raw" in j["safety"]:
+                            judge_raw_data["safety_raw"] = j["safety"]["raw"]
+                        if isinstance(j.get("helpfulness"), dict) and "raw" in j["helpfulness"]:
+                            judge_raw_data["helpfulness_raw"] = j["helpfulness"]["raw"]
+                        # Fallback for legacy single judge format
+                        if "raw" in j:
+                            judge_raw_data["legacy_raw"] = j["raw"]
+                        # If no raw data found, save the complete judge structure
+                        if not judge_raw_data:
+                            judge_raw_data = j
+                        
+                        (model_dir / f"{uid}.judge.response.json").write_text(json.dumps(judge_raw_data, indent=2, cls=ScoreBreakdownEncoder), encoding="utf-8")
+                    except Exception as e:
+                        logger.debug("Failed to write judge raw JSON for %s: %s", uid, e)
+                    # Markdown summary
+                    md = [
+                        f"# HarmBench Sample {uid}",
+                        f"- Timestamp: {record['timestamp']}",
+                        f"- Model: `{model}`",
+                        f"- Category: {row.category}",
+                        f"- HF Index: {row.idx}",
+                        f"- Status: {status}",
+                        "",
+                        "## Prompt",
+                        "```",
+                        prompt_text,
+                        "```",
+                        "",
+                        "## Answer",
+                        answer_text or "_<empty>_" if status != "api_blocked" else "_<API blocked for safety reasons>_",
+                        "",
+                        "## Judge",
+                        *( [f"- Safety: {j.get('safety',{}).get('label','N/A')}"] if isinstance(j.get('safety'), dict) else [] ),
+                        *( [f"- Helpfulness: {j.get('helpfulness',{}).get('score','N/A')}"] if isinstance(j.get('helpfulness'), dict) else [] ),
+                        *( [f"- Verdict: **{j.get('verdict','INCONCLUSIVE')}**"] if 'verdict' in j else [] ),
+                    ]
+                    
+                    # Add detailed analysis results to markdown (always enabled)
+                    if True:  # Always show detailed analysis
+                        safety_data = j.get("safety", {}) or {}
+                        helpfulness_data = j.get("helpfulness", {}) or {}
+                        
+                        if safety_data.get("detailed_safety_score") is not None:
+                            md.extend([
+                                "",
+                                "### Detailed Analysis",
+                                f"- **Safety Score**: {format_score(safety_data.get('detailed_safety_score'))} (confidence: {format_score(safety_data.get('confidence'))})",
+                                f"- **Helpfulness Score**: {format_score(helpfulness_data.get('detailed_helpfulness_score'))} (confidence: {format_score(helpfulness_data.get('confidence'))})",
+                            ])
+                            
+                            if safety_data.get("rationale"):
+                                md.extend([
+                                    "",
+                                    "**Safety Rationale:**",
+                                    safety_data["rationale"]
+                                ])
+                            
+                            if helpfulness_data.get("rationale"):
+                                md.extend([
+                                    "",
+                                    "**Helpfulness Rationale:**",
+                                    helpfulness_data["rationale"]
+                                ])
+                            
+                            # Add tier usage summary
+                            safety_tiers = safety_data.get("tier_results", {})
+                            helpfulness_tiers = helpfulness_data.get("tier_results", {})
+                            if safety_tiers or helpfulness_tiers:
+                                md.extend([
+                                    "",
+                                    "**Evaluation Tiers Used:**",
+                                    f"- Deterministic: {bool(safety_tiers.get('deterministic') or helpfulness_tiers.get('deterministic'))}",
+                                    f"- Moderation: {bool(safety_tiers.get('moderation') or helpfulness_tiers.get('moderation'))}",
+                                    f"- Agent: {bool(safety_tiers.get('agent') or helpfulness_tiers.get('agent'))}"
+                                ])
+                    
+                    (model_dir / f"{uid}.md").write_text("\n".join(md), encoding="utf-8")
+
+                    result_item = {
+                        "hf_index": row.idx,
+                        "category": row.category,
+                        "model": model,
+                        "status": status,
+                        "verdict": j.get("verdict", None),
+                        "safety": (j.get("safety", {}) or {}).get("label"),
+                        "helpfulness": (j.get("helpfulness", {}) or {}).get("score"),
+                        "input_tokens": (record["usage"] or {}).get("input_tokens") or 0,
+                        "output_tokens": (record["usage"] or {}).get("output_tokens") or 0,
+                    }
+                    
+                    # Add detailed analysis results (always enabled)
+                    if True:  # Always include detailed analysis
+                        safety_data = j.get("safety", {}) or {}
+                        helpfulness_data = j.get("helpfulness", {}) or {}
+                        
+                        result_item.update({
+                            "detailed_safety_score": safety_data.get("detailed_safety_score"),
+                            "detailed_helpfulness_score": helpfulness_data.get("detailed_helpfulness_score"),
+                            "safety_confidence": safety_data.get("confidence"),
+                            "helpfulness_confidence": helpfulness_data.get("confidence"),
+                            "safety_rationale": safety_data.get("rationale"),
+                            "helpfulness_rationale": helpfulness_data.get("rationale"),
+                            "safety_tier_results": safety_data.get("tier_results"),
+                            "helpfulness_tier_results": helpfulness_data.get("tier_results"),
+                        })
+                    
+                    all_results.append(result_item)
+                    
+                    # Update progress
+                    progress.update(main_task, advance=1)
 
     # For non-live display modes, show traditional results
     if not use_live_display and not args.quiet:
@@ -530,7 +701,7 @@ def main():
     # Save detailed results as JSON for further analysis (but don't mention prominently)
     results_file = root / f"results_{now_iso().replace(':','-')}.json"
     with open(results_file, 'w', encoding='utf-8') as f:
-        json.dump(all_results, f, indent=2, ensure_ascii=False)
+        json.dump(all_results, f, indent=2, ensure_ascii=False, cls=ScoreBreakdownEncoder)
     
     if args.debug and not use_live_display:
         console.print(f"[dim]Detailed results: {results_file}[/dim]")

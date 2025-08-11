@@ -13,7 +13,7 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 
-def call_openai_response(client: OpenAI, model: str, text: Optional[str] = None, max_tokens: int = 2048,
+def call_openai_response(client: OpenAI, model: str, text: Optional[str] = None, max_tokens: int = 4096,
                          temperature: Optional[float] = None,
                          reasoning_effort: Optional[str] = None,
                          messages: Optional[List[Dict[str, str]]] = None,

@@ -5,8 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "boto3>=1.40.6",
     "datasets>=4.0.0",
+    "langchain>=0.3.27",
+    "langchain-aws>=0.2.30",
+    "langchain-google-genai>=2.1.9",
+    "langchain-openai>=0.3.29",
+    "langgraph>=0.6.4",
     "openai>=1.99.3",
     "pandas>=2.3.1",
+    "plotext>=5.3.2",
+    "python-dotenv>=1.0.0",
     "rich>=14.1.0",
 ]
