@@ -45,7 +45,7 @@ import json
 import os
 import random
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -53,6 +53,23 @@ from typing import Any, Dict, List, Optional, Tuple
 # Load environment variables from .env file
 from dotenv import load_dotenv
 load_dotenv()
+
+# Custom JSON encoder to handle ScoreBreakdown objects
+class ScoreBreakdownEncoder(json.JSONEncoder):
+    def default(self, obj):
+        # Handle ScoreBreakdown and other dataclass objects
+        if hasattr(obj, '__dataclass_fields__'):
+            return asdict(obj)
+        # Handle enum objects
+        if hasattr(obj, 'value'):
+            return obj.value
+        return super().default(obj)
+
+def format_score(value, default='N/A'):
+    """Format a score value with 3 decimal places, handling non-numeric values."""
+    if isinstance(value, (int, float)):
+        return f"{value:.3f}"
+    return str(value if value is not None else default)
 
 # 3rd party (install via uv/pip): openai, datasets, rich
 from datasets import load_dataset
@@ -67,11 +84,13 @@ from rich.live import Live
 # Import utilities
 from utils import (
     create_results_table, show_config_panel, show_completion_panel,
-    grade_safety, grade_helpfulness, judge_answer,
+    judge_answer,
     DEFAULT_JUDGE_SYSTEM, DEFAULT_SAFETY_GRADER_SYSTEM, DEFAULT_HELPFULNESS_GRADER_SYSTEM,
     PromptRow, normalize_models_arg, build_prompt_text,
     ensure_dir, now_iso
 )
+# Import enhanced three-tier judge functions
+from utils.judge import grade_safety, grade_helpfulness
 from utils.llm_client import call_llm_response
 from utils.cli_display import console
 from utils.professional_display import ProfessionalBenchmarkDisplay
@@ -93,7 +112,7 @@ def main():
     ap.add_argument("--models", nargs="+", required=True,
                     help="Space- or comma-separated list of model names (e.g., 'gpt-5-mini o4-mini' or 'gpt-5-mini,o4-mini').")
     ap.add_argument("--judge-model", required=True, help="Model to use as the judge (e.g., gpt-5-mini)." )
-    ap.add_argument("--judge-task", default="safety", choices=["safety", "helpfulness", "both"],
+    ap.add_argument("--judge-task", default="both", choices=["safety", "helpfulness", "both"],
                     help="What to grade with the judge model: safety, helpfulness, or both.")
     ap.add_argument("--hf-dataset", default="walledai/HarmBench", help="HF dataset name." )
     ap.add_argument("--hf-config", default="standard", help="HF config/subset (e.g., standard, contextual, copyright)." )
@@ -335,7 +354,7 @@ def main():
                             judge_raw_data["legacy_raw"] = j["raw"]
                         if not judge_raw_data:
                             judge_raw_data = j
-                        (model_dir / f"{uid}.judge.response.json").write_text(json.dumps(judge_raw_data, indent=2), encoding="utf-8")
+                        (model_dir / f"{uid}.judge.response.json").write_text(json.dumps(judge_raw_data, indent=2, cls=ScoreBreakdownEncoder), encoding="utf-8")
                     except Exception as e:
                         logger.debug("Failed to write judge raw JSON for %s: %s", uid, e)
                     
@@ -361,6 +380,46 @@ def main():
                         *( [f"- Helpfulness: {j.get('helpfulness',{}).get('score','N/A')}"] if isinstance(j.get('helpfulness'), dict) else [] ),
                         *( [f"- Verdict: **{j.get('verdict','INCONCLUSIVE')}**"] if 'verdict' in j else [] ),
                     ]
+                    
+                    # Add detailed analysis results to markdown (always enabled)
+                    if True:  # Always show detailed analysis
+                        safety_data = j.get("safety", {}) or {}
+                        helpfulness_data = j.get("helpfulness", {}) or {}
+                        
+                        if safety_data.get("detailed_safety_score") is not None:
+                            md.extend([
+                                "",
+                                "### Detailed Analysis",
+                                f"- **Safety Score**: {format_score(safety_data.get('detailed_safety_score'))} (confidence: {format_score(safety_data.get('confidence'))})",
+                                f"- **Helpfulness Score**: {format_score(helpfulness_data.get('detailed_helpfulness_score'))} (confidence: {format_score(helpfulness_data.get('confidence'))})",
+                            ])
+                            
+                            if safety_data.get("rationale"):
+                                md.extend([
+                                    "",
+                                    "**Safety Rationale:**",
+                                    safety_data["rationale"]
+                                ])
+                            
+                            if helpfulness_data.get("rationale"):
+                                md.extend([
+                                    "",
+                                    "**Helpfulness Rationale:**",
+                                    helpfulness_data["rationale"]
+                                ])
+                            
+                            # Add tier usage summary
+                            safety_tiers = safety_data.get("tier_results", {})
+                            helpfulness_tiers = helpfulness_data.get("tier_results", {})
+                            if safety_tiers or helpfulness_tiers:
+                                md.extend([
+                                    "",
+                                    "**Evaluation Tiers Used:**",
+                                    f"- Deterministic: {bool(safety_tiers.get('deterministic') or helpfulness_tiers.get('deterministic'))}",
+                                    f"- Moderation: {bool(safety_tiers.get('moderation') or helpfulness_tiers.get('moderation'))}",
+                                    f"- Agent: {bool(safety_tiers.get('agent') or helpfulness_tiers.get('agent'))}"
+                                ])
+                    
                     (model_dir / f"{uid}.md").write_text("\n".join(md), encoding="utf-8")
                     
                     result_item = {
@@ -374,6 +433,22 @@ def main():
                         "input_tokens": (record["usage"] or {}).get("input_tokens") or 0,
                         "output_tokens": (record["usage"] or {}).get("output_tokens") or 0,
                     }
+                    
+                    # Add detailed analysis results (always enabled)
+                    if True:  # Always include detailed analysis
+                        safety_data = j.get("safety", {}) or {}
+                        helpfulness_data = j.get("helpfulness", {}) or {}
+                        
+                        result_item.update({
+                            "detailed_safety_score": safety_data.get("detailed_safety_score"),
+                            "detailed_helpfulness_score": helpfulness_data.get("detailed_helpfulness_score"),
+                            "safety_confidence": safety_data.get("confidence"),
+                            "helpfulness_confidence": helpfulness_data.get("confidence"),
+                            "safety_rationale": safety_data.get("rationale"),
+                            "helpfulness_rationale": helpfulness_data.get("rationale"),
+                            "safety_tier_results": safety_data.get("tier_results"),
+                            "helpfulness_tier_results": helpfulness_data.get("tier_results"),
+                        })
                     all_results.append(result_item)
                     
                     # Update live display with final result
@@ -492,7 +567,7 @@ def main():
                         if not judge_raw_data:
                             judge_raw_data = j
                         
-                        (model_dir / f"{uid}.judge.response.json").write_text(json.dumps(judge_raw_data, indent=2), encoding="utf-8")
+                        (model_dir / f"{uid}.judge.response.json").write_text(json.dumps(judge_raw_data, indent=2, cls=ScoreBreakdownEncoder), encoding="utf-8")
                     except Exception as e:
                         logger.debug("Failed to write judge raw JSON for %s: %s", uid, e)
                     # Markdown summary
@@ -517,9 +592,49 @@ def main():
                         *( [f"- Helpfulness: {j.get('helpfulness',{}).get('score','N/A')}"] if isinstance(j.get('helpfulness'), dict) else [] ),
                         *( [f"- Verdict: **{j.get('verdict','INCONCLUSIVE')}**"] if 'verdict' in j else [] ),
                     ]
+                    
+                    # Add detailed analysis results to markdown (always enabled)
+                    if True:  # Always show detailed analysis
+                        safety_data = j.get("safety", {}) or {}
+                        helpfulness_data = j.get("helpfulness", {}) or {}
+                        
+                        if safety_data.get("detailed_safety_score") is not None:
+                            md.extend([
+                                "",
+                                "### Detailed Analysis",
+                                f"- **Safety Score**: {format_score(safety_data.get('detailed_safety_score'))} (confidence: {format_score(safety_data.get('confidence'))})",
+                                f"- **Helpfulness Score**: {format_score(helpfulness_data.get('detailed_helpfulness_score'))} (confidence: {format_score(helpfulness_data.get('confidence'))})",
+                            ])
+                            
+                            if safety_data.get("rationale"):
+                                md.extend([
+                                    "",
+                                    "**Safety Rationale:**",
+                                    safety_data["rationale"]
+                                ])
+                            
+                            if helpfulness_data.get("rationale"):
+                                md.extend([
+                                    "",
+                                    "**Helpfulness Rationale:**",
+                                    helpfulness_data["rationale"]
+                                ])
+                            
+                            # Add tier usage summary
+                            safety_tiers = safety_data.get("tier_results", {})
+                            helpfulness_tiers = helpfulness_data.get("tier_results", {})
+                            if safety_tiers or helpfulness_tiers:
+                                md.extend([
+                                    "",
+                                    "**Evaluation Tiers Used:**",
+                                    f"- Deterministic: {bool(safety_tiers.get('deterministic') or helpfulness_tiers.get('deterministic'))}",
+                                    f"- Moderation: {bool(safety_tiers.get('moderation') or helpfulness_tiers.get('moderation'))}",
+                                    f"- Agent: {bool(safety_tiers.get('agent') or helpfulness_tiers.get('agent'))}"
+                                ])
+                    
                     (model_dir / f"{uid}.md").write_text("\n".join(md), encoding="utf-8")
 
-                    all_results.append({
+                    result_item = {
                         "hf_index": row.idx,
                         "category": row.category,
                         "model": model,
@@ -529,7 +644,25 @@ def main():
                         "helpfulness": (j.get("helpfulness", {}) or {}).get("score"),
                         "input_tokens": (record["usage"] or {}).get("input_tokens") or 0,
                         "output_tokens": (record["usage"] or {}).get("output_tokens") or 0,
-                    })
+                    }
+                    
+                    # Add detailed analysis results (always enabled)
+                    if True:  # Always include detailed analysis
+                        safety_data = j.get("safety", {}) or {}
+                        helpfulness_data = j.get("helpfulness", {}) or {}
+                        
+                        result_item.update({
+                            "detailed_safety_score": safety_data.get("detailed_safety_score"),
+                            "detailed_helpfulness_score": helpfulness_data.get("detailed_helpfulness_score"),
+                            "safety_confidence": safety_data.get("confidence"),
+                            "helpfulness_confidence": helpfulness_data.get("confidence"),
+                            "safety_rationale": safety_data.get("rationale"),
+                            "helpfulness_rationale": helpfulness_data.get("rationale"),
+                            "safety_tier_results": safety_data.get("tier_results"),
+                            "helpfulness_tier_results": helpfulness_data.get("tier_results"),
+                        })
+                    
+                    all_results.append(result_item)
                     
                     # Update progress
                     progress.update(main_task, advance=1)
@@ -551,7 +684,7 @@ def main():
     # Save detailed results as JSON for further analysis (but don't mention prominently)
     results_file = root / f"results_{now_iso().replace(':','-')}.json"
     with open(results_file, 'w', encoding='utf-8') as f:
-        json.dump(all_results, f, indent=2, ensure_ascii=False)
+        json.dump(all_results, f, indent=2, ensure_ascii=False, cls=ScoreBreakdownEncoder)
     
     if args.debug and not use_live_display:
         console.print(f"[dim]Detailed results: {results_file}[/dim]")
