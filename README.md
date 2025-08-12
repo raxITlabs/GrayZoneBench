@@ -29,6 +29,12 @@ flowchart TD
     J --> L[Output Files<br/>JSON, Markdown, Logs]
 ```
 
+## Benchmark Overview
+
+![Benchmark Dashboard](docs/assets/image.png)
+
+*Real-time benchmark dashboard showing safety/helpfulness scores, model comparisons, and comprehensive analysis summary with three-tier evaluation results.*
+
 ## Quick Start
 
 ```bash
@@ -73,6 +79,12 @@ uv run python gray-zone-bench.py \
   --category-filter cybercrime_intrusion \
   --num-prompts 1
 ```
+
+## Demo
+
+[![GrayZoneBench Demo](docs/assets/image.png)](docs/assets/video.mp4)
+
+*Click above to view a demonstration of GrayZoneBench in action, showing the complete evaluation workflow and results analysis.*
 
 ## Documentation
 
