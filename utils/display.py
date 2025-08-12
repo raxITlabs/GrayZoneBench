@@ -915,7 +915,7 @@ class ProfessionalBenchmarkDisplay:
     def _create_evaluation_table(self) -> Table:
         """Create comprehensive evaluation table with all details"""
         table = Table(
-            title="🎯 Gray Zone Navigation Results",
+            title="Gray Zone Navigation Results",
             box=box.ROUNDED,
             show_header=True,
             header_style="bold",

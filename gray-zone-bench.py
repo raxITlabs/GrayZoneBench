@@ -1,43 +1,41 @@
 #!/usr/bin/env python3
 """
-run_safe_completion_llmjudge_hf_v2.py
+GrayZoneBench - AI Safety Evaluation Tool
 
-HarmBench-powered safe-completion benchmark with multi-model comparison.
+Enhanced safe-completion benchmark with multi-model comparison and gray zone navigation assessment.
 
-- Loads prompts from Hugging Face (walledai/HarmBench) instead of hardcoding.
-- Lets you pick how many prompts: 1, N, or ALL; batching via --start-index.
-- Compares **multiple models** in one run (comma, space, or repeated flags).
-- Optional judge model to score refusals / compliance.
-- Resilient OpenAI Responses API handling (reasoning vs non-reasoning models).
+- Loads prompts from HuggingFace datasets (default: raxITLabs/GrayZone)
+- Lets you pick how many prompts: 1, N, or ALL; batching via --start-index
+- Compares **multiple models** in one run (comma, space, or repeated flags)
+- Three-tier evaluation system: deterministic, moderation API, agent-based LLM judgment
+- Focuses on gray zone navigation between helpful and harmful responses
 
 Examples
 --------
-# Smoke test: first prompt only (default), compare 3 models
-uv run --with openai --with datasets --with pandas \
-  python gray-zone-bench.py \
+# Smoke test: single prompt, multiple models
+uv run python gray-zone-bench.py \
   --models gpt-5-mini o4-mini o3-mini \
   --judge-model gpt-5-mini \
   --judge-task both \
-  --hf-dataset walledai/HarmBench --hf-config standard \
+  --hf-dataset raxITLabs/GrayZone --hf-config standard \
   --num-prompts 1
 
-# Take first 10 prompts from contextual subset and include context
-uv run --with openai --with datasets --with pandas \
-  python gray-zone-bench.py \
-  --models gpt-5-mini,o4-mini \
+# Contextual evaluation with dual-use scenarios
+uv run python gray-zone-bench.py \
+  --models gpt-5-mini claude-3-haiku \
   --judge-model gpt-5-mini \
   --judge-task both \
-  --hf-dataset walledai/HarmBench --hf-config contextual \
+  --hf-dataset raxITLabs/GrayZone --hf-config contextual \
   --context-column context --num-prompts 10
 
-# Full run for a window of 25 prompts starting at index 50
-uv run --with openai --with datasets --with pandas \
-  python gray-zone-bench.py \
-  --models gpt-5-mini o4-mini \
+# Full evaluation with category filtering
+uv run python gray-zone-bench.py \
+  --models gpt-5-mini claude-3-haiku \
   --judge-model gpt-5-mini \
   --judge-task both \
-  --hf-dataset walledai/HarmBench --hf-config standard \
-  --start-index 50 --num-prompts 25
+  --hf-dataset raxITLabs/GrayZone --hf-config contextual \
+  --context-column context --category-filter cybercrime_intrusion \
+  --start-index 0 --num-prompts 25
 
 """
 import argparse
@@ -108,13 +106,13 @@ logger = logging.getLogger(__name__)
 # Main
 # -------------------------------
 def main():
-    ap = argparse.ArgumentParser(description="HarmBench safe-completion judge (multi-model)." )
+    ap = argparse.ArgumentParser(description="GrayZoneBench: AI safety evaluation with gray zone navigation assessment (multi-model)." )
     ap.add_argument("--models", nargs="+", required=True,
                     help="Space- or comma-separated list of model names (e.g., 'gpt-5-mini o4-mini' or 'gpt-5-mini,o4-mini').")
     ap.add_argument("--judge-model", required=True, help="Model to use as the judge (e.g., gpt-5-mini)." )
     ap.add_argument("--judge-task", default="both", choices=["safety", "helpfulness", "both"],
                     help="What to grade with the judge model: safety, helpfulness, or both.")
-    ap.add_argument("--hf-dataset", default="walledai/HarmBench", help="HF dataset name." )
+    ap.add_argument("--hf-dataset", default="raxITLabs/GrayZone", help="HF dataset name." )
     ap.add_argument("--hf-config", default="standard", help="HF config/subset (e.g., standard, contextual, copyright)." )
     ap.add_argument("--hf-split", default="train", help="HF split (e.g., train, validation, test)." )
     ap.add_argument("--prompt-column", default="prompt", help="Column that contains the prompt/question." )
@@ -139,7 +137,7 @@ def main():
     ap.add_argument("--quiet", "-q", action="store_true",
                     help="Minimal output, only final results.")
     ap.add_argument("--log-file", default=None,
-                    help="Optional path for a log file. Defaults to out/harmbench_<config>/run.log")
+                    help="Optional path for a log file. Defaults to out/<dataset>_<config>/run.log")
     args = ap.parse_args()
 
     # Configure logging levels based on CLI flags
@@ -242,8 +240,9 @@ def main():
         cat = str(cat).strip() if cat is not None else None
         rows.append(PromptRow(idx=i, prompt=prompt, context=ctx, category=cat))
 
-    # Output dirs
-    root = Path("out") / ("harmbench_" + args.hf_config)
+    # Output dirs - dynamically generate from dataset name
+    dataset_name = args.hf_dataset.split('/')[-1].lower()  # "raxITLabs/GrayZone" → "grayzone"
+    root = Path("out") / f"{dataset_name}_{args.hf_config}"
     ensure_dir(root)
     # Add file handler for detailed logging
     try:
@@ -377,7 +376,7 @@ def main():
                     
                     # Markdown summary
                     md = [
-                        f"# HarmBench Sample {uid}",
+                        f"# {dataset_name.title()} Sample {uid}",
                         f"- Timestamp: {record['timestamp']}",
                         f"- Model: `{model}`",
                         f"- Category: {row.category}",
@@ -589,7 +588,7 @@ def main():
                         logger.debug("Failed to write judge raw JSON for %s: %s", uid, e)
                     # Markdown summary
                     md = [
-                        f"# HarmBench Sample {uid}",
+                        f"# {dataset_name.title()} Sample {uid}",
                         f"- Timestamp: {record['timestamp']}",
                         f"- Model: `{model}`",
                         f"- Category: {row.category}",
