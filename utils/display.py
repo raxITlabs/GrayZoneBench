@@ -78,6 +78,7 @@ class ProfessionalBenchmarkDisplay:
                     'agent': None
                 },
                 'gray_zone_navigation': None,
+                'response_modes': {},  # Track response mode counts
                 'confidence_scores': {},
                 'severity_assessment': None,
                 # Rationale storage for dynamic display
@@ -246,6 +247,10 @@ class ProfessionalBenchmarkDisplay:
                             self.activity_log.append(f"{model}: 🟧 Gray zone scenario ({response_mode} navigation)")
                         elif scenario_type == 'clear-safe':
                             self.activity_log.append(f"{model}: 🟩 Clear-safe scenario ({response_mode} response)")
+                        
+                        # Track response mode counts
+                        if response_mode in ['direct-answer', 'safe-completion', 'constructive-refusal']:
+                            progress_data['response_modes'][response_mode] = progress_data['response_modes'].get(response_mode, 0) + 1
                     
                     # Confidence scores from different tiers
                     progress_data['confidence_scores'] = {
@@ -430,7 +435,7 @@ class ProfessionalBenchmarkDisplay:
             layout.split_column(
                 Layout(context_header, size=header_height),
                 Layout(name="info_row", size=8),
-                Layout(evaluation_table, size=len(self.models) + 6),
+                Layout(evaluation_table, size=len(self.models) + 7),
                 Layout(name="charts_row", size=charts_height),
                 Layout(current_activity, size=activity_height)
             )
@@ -450,7 +455,7 @@ class ProfessionalBenchmarkDisplay:
             layout.split_column(
                 Layout(context_header, size=header_height),
                 Layout(dataset_info, size=6),
-                Layout(evaluation_table, size=len(self.models) + 6),
+                Layout(evaluation_table, size=len(self.models) + 7),
                 Layout(statistics_panel, size=8),
                 Layout(charts_panel, size=charts_height),
                 Layout(current_activity, size=activity_height)
@@ -910,11 +915,11 @@ class ProfessionalBenchmarkDisplay:
     def _create_evaluation_table(self) -> Table:
         """Create comprehensive evaluation table with all details"""
         table = Table(
-            title="Live Safe Completion Results",
+            title="🎯 Gray Zone Navigation Results",
             box=box.ROUNDED,
             show_header=True,
             header_style="bold",
-            title_style="bold",
+            title_style="bold cyan",
             expand=True  # Make table responsive to terminal width
         )
         
@@ -930,23 +935,23 @@ class ProfessionalBenchmarkDisplay:
         MAX_CONTENT_WIDTH = 120
         effective_width = min(terminal_width, MAX_CONTENT_WIDTH)
         
-        table.add_column("Model", style="bold")
-        table.add_column("Progress", justify="center")
+        table.add_column("Model", style="bold", width=10, overflow="ellipsis")
+        table.add_column("Progress", justify="center", width=8)
         
         if any_detailed_analysis:
-            table.add_column("Safety", justify="center")
-            table.add_column("Help", justify="center")
-            if effective_width >= 100:  # Only show intent/confidence on wider screens
-                table.add_column("Intent", justify="center")
-                table.add_column("Confidence", justify="center")
+            table.add_column("Safety", justify="center", width=6)
+            table.add_column("Help", justify="center", width=6)
+            if effective_width >= 100:  # Only show effectiveness/mode on wider screens
+                table.add_column("Effectiveness\n(S×H)", justify="center", width=14, overflow="fold")
+                table.add_column("Response Mode", justify="center", width=10, overflow="fold")
         else:
-            table.add_column("Safety", justify="center")
-            table.add_column("SC", justify="center")  # Safe Completion
+            table.add_column("Safety", justify="center", width=6)
+            table.add_column("SC", justify="center", width=6)  # Safe Completion
         
-        table.add_column("Tokens", justify="center")
+        table.add_column("Tokens", justify="center", width=6)
         if effective_width >= 80:  # Only show time column on wider screens
-            table.add_column("Time", justify="center")
-        table.add_column("Current Task")
+            table.add_column("Time", justify="center", width=6)
+        table.add_column("Current Task", width=25, overflow="fold")
         
         # Ensure all models are shown, even if not started yet
         for model in self.models:
@@ -996,34 +1001,37 @@ class ProfessionalBenchmarkDisplay:
                 else:
                     help_display = "[default]-[/default]"
                 
-                # Intent classification and confidence for wider screens
+                # Gray zone effectiveness and response mode for wider screens
                 if effective_width >= 100:
-                    intent_data = progress_data.get('intent_classification')
-                    if intent_data:
-                        intent = intent_data.get('intent', 'unknown')
-                        if intent == 'malicious':
-                            intent_display = "[red]RISK[/red]"
-                        elif intent == 'legitimate':
-                            intent_display = "[green]SAFE[/green]"
-                        else:
-                            intent_display = "[dim]UNKN[/dim]"
+                    # Calculate gray zone effectiveness (safety × helpfulness)
+                    if (progress_data['detailed_safety_scores'] and 
+                        progress_data['detailed_helpfulness_scores']):
+                        avg_safety_val = sum(progress_data['detailed_safety_scores']) / len(progress_data['detailed_safety_scores'])
+                        avg_help_val = sum(progress_data['detailed_helpfulness_scores']) / len(progress_data['detailed_helpfulness_scores'])
+                        effectiveness = avg_safety_val * avg_help_val
                         
-                        # Overall confidence indicator with numerical display
-                        avg_conf = (progress_data['confidence_scores'].get('safety', 0) + 
-                                  progress_data['confidence_scores'].get('helpfulness', 0)) / 2
-                        if avg_conf >= 0.8:
-                            conf_display = f"[green]{avg_conf:.2f}[/green]"
-                        elif avg_conf >= 0.6:
-                            conf_display = f"[yellow]{avg_conf:.2f}[/yellow]"
-                        elif avg_conf >= 0.4:
-                            conf_display = f"[red]{avg_conf:.2f}[/red]"
-                        elif avg_conf > 0:
-                            conf_display = f"[dim]{avg_conf:.2f}[/dim]"
+                        if effectiveness >= 0.7:
+                            effectiveness_display = f"[bold green]{effectiveness:.3f}[/bold green]"
+                        elif effectiveness >= 0.5:
+                            effectiveness_display = f"[bold yellow]{effectiveness:.3f}[/bold yellow]"
                         else:
-                            conf_display = "[dim]0.00[/dim]"
+                            effectiveness_display = f"[bold red]{effectiveness:.3f}[/bold red]"
                     else:
-                        intent_display = "[dim]-[/dim]"
-                        conf_display = "[dim]-[/dim]"
+                        effectiveness_display = "[dim]-[/dim]"
+                    
+                    # Get dominant response mode
+                    response_modes = progress_data.get('response_modes', {})
+                    if response_modes:
+                        dominant_mode = max(response_modes.items(), key=lambda x: x[1])[0]
+                        mode_icons = {
+                            'direct-answer': 'Direct',
+                            'safe-completion': 'Safe',
+                            'constructive-refusal': 'Refusal',
+                            'unknown': 'Unknown'
+                        }
+                        mode_display = mode_icons.get(dominant_mode, dominant_mode)
+                    else:
+                        mode_display = "[dim]-[/dim]"
             else:
                 # Traditional binary safety and 0-4 helpfulness displays
                 safe_count = progress_data['safe']
@@ -1089,15 +1097,15 @@ class ProfessionalBenchmarkDisplay:
                 current_task += f" | {' '.join(issues)}"
             
             # Build row based on effective width
-            if effective_width >= 100:  # Wide screen with intent/confidence
+            if effective_width >= 100:  # Wide screen with effectiveness/mode
                 if effective_width >= 80:  # Include time column
                     table.add_row(
                         model,
                         progress_bar,
                         safety_display,
                         help_display,
-                        intent_display,
-                        conf_display,
+                        effectiveness_display,
+                        mode_display,
                         tokens_display,
                         time_display,
                         current_task
@@ -1108,8 +1116,8 @@ class ProfessionalBenchmarkDisplay:
                         progress_bar,
                         safety_display,
                         help_display,
-                        intent_display,
-                        conf_display,
+                        effectiveness_display,
+                        mode_display,
                         tokens_display,
                         current_task
                     )
@@ -1195,10 +1203,7 @@ class ProfessionalBenchmarkDisplay:
             total_tokens_out = sum(p['tokens_out'] for p in self.model_progress.values())
             
             activity = f"[green]■ Safe Completion Evaluation Complete![/green]\n\n"
-            activity += f"[default]Duration:[/default] {elapsed_str}\n"
-            activity += f"[default]Safety:[/default] [green]{total_safe} safe[/green] / [red]{total_unsafe} unsafe[/red]\n"
-            activity += f"[default]Tokens:[/default] [yellow]{total_tokens_in:,}[/yellow] in → [white]{total_tokens_out:,}[/white] out\n"
-            activity += f"[dim]Performance:[/dim] {self.performance_metrics['requests_per_second']:.1f} req/sec, {self.performance_metrics['tokens_per_second']:.0f} tok/sec"
+            activity += f"[default]Duration:[/default] {elapsed_str}"
             
             # Enhanced model helpfulness analysis
             if len(self.models) > 1:

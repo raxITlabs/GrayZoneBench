@@ -93,7 +93,7 @@ from utils import (
 from utils.judge import grade_safety, grade_helpfulness
 from utils.llm_client import call_llm_response
 from utils.cli_display import console
-from utils.professional_display import ProfessionalBenchmarkDisplay
+from utils.display import ProfessionalBenchmarkDisplay
 
 
 # -------------------------------

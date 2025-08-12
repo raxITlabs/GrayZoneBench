@@ -80,7 +80,7 @@ uv run python gray-zone-bench.py \
 - `judge.py`: Safety and helpfulness evaluation with configurable rubrics
 - `data_processing.py`: HuggingFace dataset loading and prompt processing
 - `cli_display.py`: Beautiful CLI output with Rich library integration
-- `professional_display.py`: Live progress display inspired by Claude Code interface
+- `display.py`: Live progress display inspired by Claude Code interface
 - `file_utils.py`: Result serialization and directory management
 - `scoring_rubrics.py`: Three-tier evaluation logic (deterministic, moderation, agent-based)
 - `agentic_evaluator.py`: Advanced agent-based evaluation workflows
