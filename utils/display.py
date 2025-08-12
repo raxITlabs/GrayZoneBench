@@ -249,7 +249,7 @@ class ProfessionalBenchmarkDisplay:
                             self.activity_log.append(f"{model}: 🟩 Clear-safe scenario ({response_mode} response)")
                         
                         # Track response mode counts
-                        if response_mode in ['direct-answer', 'safe-completion', 'constructive-refusal']:
+                        if response_mode in ['direct-answer', 'safe-completion', 'constructive-refusal', 'bare-refusal']:
                             progress_data['response_modes'][response_mode] = progress_data['response_modes'].get(response_mode, 0) + 1
                     
                     # Confidence scores from different tiers
@@ -935,20 +935,20 @@ class ProfessionalBenchmarkDisplay:
         MAX_CONTENT_WIDTH = 120
         effective_width = min(terminal_width, MAX_CONTENT_WIDTH)
         
-        table.add_column("Model", style="bold", width=10, overflow="ellipsis")
+        table.add_column("Model", style="bold", width=13, overflow="ellipsis")
         table.add_column("Progress", justify="center", width=8)
         
         if any_detailed_analysis:
-            table.add_column("Safety", justify="center", width=6)
+            table.add_column("Safety", justify="center", width=7)
             table.add_column("Help", justify="center", width=6)
             if effective_width >= 100:  # Only show effectiveness/mode on wider screens
                 table.add_column("Effectiveness\n(S×H)", justify="center", width=14, overflow="fold")
-                table.add_column("Response Mode", justify="center", width=10, overflow="fold")
+                table.add_column("Response Mode", justify="center", width=9, overflow="fold")
         else:
-            table.add_column("Safety", justify="center", width=6)
+            table.add_column("Safety", justify="center", width=7)
             table.add_column("SC", justify="center", width=6)  # Safe Completion
         
-        table.add_column("Tokens", justify="center", width=6)
+        table.add_column("Tokens", justify="center", width=8)
         if effective_width >= 80:  # Only show time column on wider screens
             table.add_column("Time", justify="center", width=6)
         table.add_column("Current Task", width=25, overflow="fold")
@@ -1026,12 +1026,26 @@ class ProfessionalBenchmarkDisplay:
                         mode_icons = {
                             'direct-answer': 'Direct',
                             'safe-completion': 'Safe',
-                            'constructive-refusal': 'Refusal',
+                            'constructive-refusal': 'Helpful',
+                            'bare-refusal': 'Refuse',
                             'unknown': 'Unknown'
                         }
                         mode_display = mode_icons.get(dominant_mode, dominant_mode)
                     else:
-                        mode_display = "[dim]-[/dim]"
+                        # Fallback: Check gray_zone_navigation for response mode if counts are empty
+                        gray_zone_nav = progress_data.get('gray_zone_navigation')
+                        if gray_zone_nav and gray_zone_nav.get('response_mode'):
+                            fallback_mode = gray_zone_nav['response_mode']
+                            mode_icons = {
+                                'direct-answer': 'Direct',
+                                'safe-completion': 'Safe',
+                                'constructive-refusal': 'Helpful',
+                                'bare-refusal': 'Refuse',
+                                'unknown': 'Unknown'
+                            }
+                            mode_display = mode_icons.get(fallback_mode, fallback_mode)
+                        else:
+                            mode_display = "[dim]-[/dim]"
             else:
                 # Traditional binary safety and 0-4 helpfulness displays
                 safe_count = progress_data['safe']

@@ -45,7 +45,7 @@ def create_results_table(results: List[Dict[str, Any]]) -> Table:
                 'total': 0, 'ok': 0, 'blocked': 0, 'error': 0,
                 'safety_scores': [], 'helpful_scores': [], 
                 'effectiveness_scores': [],
-                'response_modes': {'direct-answer': 0, 'safe-completion': 0, 'constructive-refusal': 0, 'unknown': 0}
+                'response_modes': {'direct-answer': 0, 'safe-completion': 0, 'constructive-refusal': 0, 'bare-refusal': 0, 'unknown': 0}
             }
         
         stats = model_stats[model]
@@ -124,7 +124,8 @@ def create_results_table(results: List[Dict[str, Any]]) -> Table:
         mode_icons = {
             'direct-answer': 'Direct',
             'safe-completion': 'Safe',
-            'constructive-refusal': 'Refusal',
+            'constructive-refusal': 'Helpful',
+            'bare-refusal': 'Refuse',
             'unknown': 'Unknown'
         }
         mode_str = mode_icons.get(dominant_mode, dominant_mode)
@@ -296,7 +297,7 @@ def create_gray_zone_effectiveness_panel(results: List[Dict[str, Any]]) -> Panel
             total_modes = sum(stats['response_modes'].values())
             for mode, count in sorted(stats['response_modes'].items(), key=lambda x: x[1], reverse=True):
                 pct = (count / total_modes) * 100
-                icon = {'direct-answer': '•', 'safe-completion': '•', 'constructive-refusal': '•'}.get(mode, '•')
+                icon = {'direct-answer': '•', 'safe-completion': '•', 'constructive-refusal': '•', 'bare-refusal': '•'}.get(mode, '•')
                 content += f"    {icon} {mode}: {count} ({pct:.0f}%)\n"
         
         # Scenario type breakdown
@@ -375,7 +376,7 @@ def show_detailed_analysis(results: List[Dict[str, Any]], model_filter: str = No
     # Aggregate three-tier statistics
     tier_stats = {'deterministic': 0, 'moderation': 0, 'agent': 0}
     gray_zone_stats = {'clear-harmful': 0, 'gray-zone': 0, 'clear-safe': 0, 'unknown': 0}
-    response_mode_stats = {'direct-answer': 0, 'safe-completion': 0, 'constructive-refusal': 0, 'unknown': 0}
+    response_mode_stats = {'direct-answer': 0, 'safe-completion': 0, 'constructive-refusal': 0, 'bare-refusal': 0, 'unknown': 0}
     severity_stats = {'high': 0, 'medium': 0, 'low': 0, 'negligible': 0}
     confidence_scores = {'safety': [], 'helpfulness': []}
     gray_zone_effectiveness_scores = []
@@ -489,6 +490,8 @@ def show_detailed_analysis(results: List[Dict[str, Any]], model_filter: str = No
                     response_table.add_row(f"[green]Safe Completion[/green]", f"[green]{count}[/green]", f"[green]{percentage}[/green]")
                 elif mode == 'constructive-refusal':
                     response_table.add_row(f"[cyan]Constructive Refusal[/cyan]", f"[cyan]{count}[/cyan]", f"[cyan]{percentage}[/cyan]")
+                elif mode == 'bare-refusal':
+                    response_table.add_row(f"[red]Bare Refusal[/red]", f"[red]{count}[/red]", f"[red]{percentage}[/red]")
                 else:
                     response_table.add_row(f"[dim]? Unknown[/dim]", str(count), percentage)
         

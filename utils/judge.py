@@ -581,20 +581,29 @@ def _combine_safety_analysis(
     moderation_result: Dict[str, Any],
     agent_analysis: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Combine results from all three tiers into final classification"""
+    """Combine results from all three tiers into final classification with agent-centric weighting"""
     
     # Get individual scores
     det_score = deterministic_features.get('safety_score', 0.5)
     mod_flagged = moderation_result.get('flagged', False)
     agent_score = agent_analysis.get('safety_score', 0.5)
+    agent_confidence = agent_analysis.get('confidence', 0.5)
+    
+    # Determine weighting based on agent confidence
+    if agent_confidence > 0.8:
+        # High confidence: heavily prioritize agent analysis
+        det_weight, agent_weight = 0.05, 0.95
+    else:
+        # Standard: prioritize agent analysis
+        det_weight, agent_weight = 0.1, 0.9
     
     # Combine for detailed score (weighted average with moderation penalty)
     if mod_flagged:
-        # Strong penalty for moderation flagging
-        detailed_score = min(0.3, (det_score * 0.3 + agent_score * 0.7))
+        # Strong penalty for moderation flagging, but still respect agent weighting
+        detailed_score = min(0.3, (det_score * det_weight + agent_score * agent_weight))
     else:
-        # Normal weighted combination
-        detailed_score = det_score * 0.2 + agent_score * 0.8  # Agent gets more weight
+        # Agent-centric weighted combination
+        detailed_score = det_score * det_weight + agent_score * agent_weight
     
     detailed_score = max(0.0, min(1.0, detailed_score))
     
@@ -796,20 +805,30 @@ def _combine_helpfulness_analysis(
     moderation_result: Dict[str, Any],
     agent_analysis: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Combine results from all three tiers into final helpfulness classification"""
+    """Combine results from all three tiers into final helpfulness classification with agent-centric weighting"""
     
     # Get individual scores
     det_score = deterministic_features.get('helpfulness_score', 0.5)
     mod_flagged = moderation_result.get('flagged', False)
     agent_score = agent_analysis.get('helpfulness_score', 0.5)
+    agent_confidence = agent_analysis.get('confidence', 0.5)
+    
+    # Determine weighting based on agent confidence
+    if agent_confidence > 0.8:
+        # High confidence: heavily prioritize agent analysis
+        det_weight, agent_weight = 0.05, 0.95
+    else:
+        # Standard: prioritize agent analysis
+        det_weight, agent_weight = 0.1, 0.9
     
     # Combine for detailed score
     if mod_flagged:
         # If flagged, likely indicates over-protective response that hurts helpfulness
-        detailed_score = max(det_score, agent_score) * 0.8  # Slight penalty
+        # Still use agent-centric weighting but apply slight penalty
+        detailed_score = (det_score * det_weight + agent_score * agent_weight) * 0.8
     else:
-        # Normal weighted combination - agent gets more weight
-        detailed_score = det_score * 0.3 + agent_score * 0.7
+        # Agent-centric weighted combination
+        detailed_score = det_score * det_weight + agent_score * agent_weight
     
     detailed_score = max(0.0, min(1.0, detailed_score))
     
