@@ -41,6 +41,8 @@ class ProfessionalBenchmarkDisplay:
         self.total_dataset_size = total_dataset_size
         self.category_filter = category_filter
         self.start_time = datetime.now()
+        # Cap rendered content to a fixed width regardless of terminal size
+        self.max_content_width = 120
         
         # Additional tracking for enhanced statistics
         self.total_tokens_processed = 0
@@ -376,13 +378,9 @@ class ProfessionalBenchmarkDisplay:
     
     def generate_display(self) -> Layout:
         """Generate the comprehensive professional dashboard with simple left-aligned layout"""
-        from rich.console import Console
-        console = Console()
-        terminal_width = console.size.width
-        
-        # Simple width constraint - keep it narrow and left-aligned
-        MAX_CONTENT_WIDTH = 120  # Narrower for better appearance
-        effective_width = min(terminal_width, MAX_CONTENT_WIDTH)
+        # Use a fixed effective width so the UI does NOT change when terminal size changes
+        MAX_CONTENT_WIDTH = self.max_content_width
+        effective_width = self.max_content_width
         
         # Create simple layout - naturally left-aligned
         layout = Layout()
@@ -398,72 +396,31 @@ class ProfessionalBenchmarkDisplay:
         
         # Use constrained heights for panels to prevent over-stretching
         charts_height = min(15, 20)  # Cap at 20 lines max
-        header_height = min(8, 10)   # Cap header at 10 lines max
+        header_height = 12   # Allow enough space so header content (incl. progress bar) isn't clipped
         activity_height = min(6, 8)  # Cap activity at 8 lines max
         
-        # Use responsive layout based on effective width (capped for narrow display)
-        if effective_width >= 120:
-            # Wide layout: 3 columns with charts (but constrained to 120 chars)
-            layout.split_column(
-                Layout(context_header, size=header_height),
-                Layout(name="main_content", size=len(self.models) + 8),
-                Layout(name="bottom_panels", size=activity_height)
-            )
-            
-            # Split main content into 3 columns
-            layout["main_content"].split_row(
-                Layout(name="left_column", ratio=1),
-                Layout(evaluation_table, name="center_column", ratio=2),
-                Layout(name="right_column", ratio=1)
-            )
-            
-            # Fill left and right columns with height constraints
-            layout["left_column"].split_column(
-                Layout(dataset_info, size=min(8, 10)),  # Cap info panel height
-                Layout(config_panel)
-            )
-            
-            layout["right_column"].split_column(
-                Layout(statistics_panel, size=min(8, 12)),  # Cap stats panel height
-                Layout(charts_panel, size=charts_height)
-            )
-            
-            layout["bottom_panels"].update(current_activity)
-            
-        elif effective_width >= 80:
-            # Medium layout: 2 columns with stacked info
-            layout.split_column(
-                Layout(context_header, size=header_height),
-                Layout(name="info_row", size=8),
-                Layout(evaluation_table, size=len(self.models) + 7),
-                Layout(name="charts_row", size=charts_height),
-                Layout(current_activity, size=activity_height)
-            )
-            
-            # Top info row
-            layout["info_row"].split_row(
-                Layout(dataset_info),
-                Layout(config_panel),
-                Layout(statistics_panel)
-            )
-            
-            # Charts row
-            layout["charts_row"].update(charts_panel)
-            
-        else:
-            # Narrow layout: single column (enhanced with charts)
-            layout.split_column(
-                Layout(context_header, size=header_height),
-                Layout(dataset_info, size=6),
-                Layout(evaluation_table, size=len(self.models) + 7),
-                Layout(statistics_panel, size=8),
-                Layout(charts_panel, size=charts_height),
-                Layout(current_activity, size=activity_height)
-            )
+        # Use a fixed, non-responsive layout so widening the terminal doesn't change structure
+        layout.split_column(
+            Layout(context_header, size=header_height),
+            Layout(name="info_row", size=8),
+            Layout(evaluation_table, size=len(self.models) + 7),
+            Layout(name="charts_row", size=charts_height),
+            Layout(current_activity, size=activity_height)
+        )
+
+        # Top info row (fixed 3-way split)
+        layout["info_row"].split_row(
+            Layout(dataset_info),
+            Layout(config_panel),
+            Layout(statistics_panel)
+        )
+
+        # Charts row (fixed)
+        layout["charts_row"].update(charts_panel)
         
         # Apply Rich Align width constraint for consistent left-aligned layout
         from rich.align import Align
-        constrained_layout = Align.left(layout, width=120, pad=True)
+        constrained_layout = Align.left(layout, width=self.max_content_width, pad=True)
         
         return constrained_layout
     
@@ -845,16 +802,20 @@ class ProfessionalBenchmarkDisplay:
             all_detailed_safety.extend(p['detailed_safety_scores'])
             all_detailed_helpfulness.extend(p['detailed_helpfulness_scores'])
         
-        # Key metrics with enhanced detailed scoring
+        # Key metrics with enhanced detailed scoring (without inline % progress)
         if all_detailed_safety and all_detailed_helpfulness:
             avg_detailed_safety = sum(all_detailed_safety) / len(all_detailed_safety)
             avg_detailed_help = sum(all_detailed_helpfulness) / len(all_detailed_helpfulness)
-            metrics_line = f"[green]Safety: {avg_detailed_safety:.3f}/1.0[/green] | [cyan]Helpfulness: {avg_detailed_help:.3f}/1.0[/cyan] | [white]Progress: {progress_pct:.0f}%[/white]"
+            metrics_line = f"[green]Safety: {avg_detailed_safety:.2f}/1.0[/green] | [cyan]Helpfulness: {avg_detailed_help:.2f}/1.0[/cyan]"
         elif all_helpfulness:
             # Fallback to traditional scoring
-            metrics_line = f"[green]Safety: {safety_rate:.0f}%[/green] | [cyan]Safe Completion: {avg_helpfulness:.1f}/4[/cyan] | [white]Progress: {progress_pct:.0f}%[/white]"
+            metrics_line = f"[green]Safety: {safety_rate:.0f}%[/green] | [cyan]Safe Completion: {avg_helpfulness:.1f}/4[/cyan]"
         else:
-            metrics_line = f"[white]Progress: {progress_pct:.0f}%[/white] | [dim]Awaiting evaluation results[/dim]"
+            metrics_line = f"[dim]Awaiting evaluation results[/dim]"
+
+        # Dynamic progress bar line
+        progress_bar = self._create_inline_progress_bar(self.total_completed, self.total_tasks, width=24)
+        progress_line = f"[white]Progress:[/white] {progress_bar} {self.total_completed}/{self.total_tasks} ({progress_pct:.0f}%)"
         
         # Model status summary
         completed_models = sum(1 for p in self.model_progress.values() if p['status'] == 'complete')
@@ -902,7 +863,7 @@ class ProfessionalBenchmarkDisplay:
             if best_model:
                 best_model_info = f"\nLeading Model: [magenta]{best_model}[/magenta] (best safe completion rate)"
         
-        header_content = f"{title}\n{purpose}\n\n{metrics_line}\n{models_info}\n\n{objective}{best_model_info}"
+        header_content = f"{title}\n{purpose}\n\n{metrics_line}\n{progress_line}\n{models_info}\n\n{objective}{best_model_info}"
         
         return Panel(
             header_content,
@@ -911,6 +872,31 @@ class ProfessionalBenchmarkDisplay:
             # style="white",
             padding=(1, 2)
         )
+
+    def _create_inline_progress_bar(self, completed: int, total: int, width: int = 24) -> str:
+        """Create a compact inline progress bar for header display.
+
+        Uses fixed character width and colors to avoid layout shifts.
+        """
+        if total <= 0:
+            # Show an indeterminate placeholder bar
+            return "[dim]" + ("░" * width) + "[/dim]"
+
+        ratio = max(0.0, min(1.0, completed / total))
+        filled = int(ratio * width)
+        # Use a partial block if there is remainder and room
+        has_partial = (ratio * width) - filled >= 0.5 and filled < width
+
+        bar = ""
+        if filled > 0:
+            bar += "[cyan]" + ("█" * filled) + "[/cyan]"
+        if has_partial:
+            bar += "[cyan]▓[/cyan]"
+        remaining = width - filled - (1 if has_partial else 0)
+        if remaining > 0:
+            bar += "[dim]" + ("░" * remaining) + "[/dim]"
+
+        return bar
     
     def _create_evaluation_table(self) -> Table:
         """Create comprehensive evaluation table with all details"""
@@ -920,37 +906,25 @@ class ProfessionalBenchmarkDisplay:
             show_header=True,
             header_style="bold",
             title_style="bold cyan",
-            expand=True  # Make table responsive to terminal width
+            expand=False  # Fixed-width table to avoid stretching with terminal size
         )
         
         # Detailed analysis is always enabled with three-tier system
         any_detailed_analysis = True
         
-        # Add responsive columns with three-tier analysis indicators
-        from rich.console import Console
-        console = Console()
-        terminal_width = console.size.width
-        
-        # Use same width constraint as main layout
-        MAX_CONTENT_WIDTH = 120
-        effective_width = min(terminal_width, MAX_CONTENT_WIDTH)
+        # Use the same fixed width as the main layout (no responsiveness)
+        effective_width = self.max_content_width
         
         table.add_column("Model", style="bold", width=13, overflow="ellipsis")
         table.add_column("Progress", justify="center", width=8)
         
-        if any_detailed_analysis:
-            table.add_column("Safety", justify="center", width=7)
-            table.add_column("Help", justify="center", width=6)
-            if effective_width >= 100:  # Only show effectiveness/mode on wider screens
-                table.add_column("Effectiveness\n(S×H)", justify="center", width=14, overflow="fold")
-                table.add_column("Response Mode", justify="center", width=9, overflow="fold")
-        else:
-            table.add_column("Safety", justify="center", width=7)
-            table.add_column("SC", justify="center", width=6)  # Safe Completion
-        
+        # Fixed set of columns to avoid layout changes across terminal sizes
+        table.add_column("Safety", justify="center", width=7)
+        table.add_column("Help", justify="center", width=6)
+        table.add_column("Effectiveness\n(S×H)", justify="center", width=12, overflow="fold")
+        table.add_column("Response Mode", justify="center", width=10, overflow="fold")
         table.add_column("Tokens", justify="center", width=8)
-        if effective_width >= 80:  # Only show time column on wider screens
-            table.add_column("Time", justify="center", width=6)
+        table.add_column("Time", justify="center", width=6)
         table.add_column("Current Task", width=25, overflow="fold")
         
         # Ensure all models are shown, even if not started yet
@@ -1001,28 +975,38 @@ class ProfessionalBenchmarkDisplay:
                 else:
                     help_display = "[default]-[/default]"
                 
-                # Gray zone effectiveness and response mode for wider screens
-                if effective_width >= 100:
-                    # Calculate gray zone effectiveness (safety × helpfulness)
-                    if (progress_data['detailed_safety_scores'] and 
-                        progress_data['detailed_helpfulness_scores']):
-                        avg_safety_val = sum(progress_data['detailed_safety_scores']) / len(progress_data['detailed_safety_scores'])
-                        avg_help_val = sum(progress_data['detailed_helpfulness_scores']) / len(progress_data['detailed_helpfulness_scores'])
-                        effectiveness = avg_safety_val * avg_help_val
-                        
-                        if effectiveness >= 0.7:
-                            effectiveness_display = f"[bold green]{effectiveness:.3f}[/bold green]"
-                        elif effectiveness >= 0.5:
-                            effectiveness_display = f"[bold yellow]{effectiveness:.3f}[/bold yellow]"
-                        else:
-                            effectiveness_display = f"[bold red]{effectiveness:.3f}[/bold red]"
-                    else:
-                        effectiveness_display = "[dim]-[/dim]"
+                # Gray zone effectiveness (safety × helpfulness) and dominant response mode
+                if (progress_data['detailed_safety_scores'] and 
+                    progress_data['detailed_helpfulness_scores']):
+                    avg_safety_val = sum(progress_data['detailed_safety_scores']) / len(progress_data['detailed_safety_scores'])
+                    avg_help_val = sum(progress_data['detailed_helpfulness_scores']) / len(progress_data['detailed_helpfulness_scores'])
+                    effectiveness = avg_safety_val * avg_help_val
                     
-                    # Get dominant response mode
-                    response_modes = progress_data.get('response_modes', {})
-                    if response_modes:
-                        dominant_mode = max(response_modes.items(), key=lambda x: x[1])[0]
+                    if effectiveness >= 0.7:
+                        effectiveness_display = f"[bold green]{effectiveness:.3f}[/bold green]"
+                    elif effectiveness >= 0.5:
+                        effectiveness_display = f"[bold yellow]{effectiveness:.3f}[/bold yellow]"
+                    else:
+                        effectiveness_display = f"[bold red]{effectiveness:.3f}[/bold red]"
+                else:
+                    effectiveness_display = "[dim]-[/dim]"
+
+                response_modes = progress_data.get('response_modes', {})
+                if response_modes:
+                    dominant_mode = max(response_modes.items(), key=lambda x: x[1])[0]
+                    mode_icons = {
+                        'direct-answer': 'Direct',
+                        'safe-completion': 'Safe',
+                        'constructive-refusal': 'Helpful',
+                        'bare-refusal': 'Refuse',
+                        'unknown': 'Unknown'
+                    }
+                    mode_display = mode_icons.get(dominant_mode, dominant_mode)
+                else:
+                    # Fallback: Check gray_zone_navigation for response mode if counts are empty
+                    gray_zone_nav = progress_data.get('gray_zone_navigation')
+                    if gray_zone_nav and gray_zone_nav.get('response_mode'):
+                        fallback_mode = gray_zone_nav['response_mode']
                         mode_icons = {
                             'direct-answer': 'Direct',
                             'safe-completion': 'Safe',
@@ -1030,22 +1014,9 @@ class ProfessionalBenchmarkDisplay:
                             'bare-refusal': 'Refuse',
                             'unknown': 'Unknown'
                         }
-                        mode_display = mode_icons.get(dominant_mode, dominant_mode)
+                        mode_display = mode_icons.get(fallback_mode, fallback_mode)
                     else:
-                        # Fallback: Check gray_zone_navigation for response mode if counts are empty
-                        gray_zone_nav = progress_data.get('gray_zone_navigation')
-                        if gray_zone_nav and gray_zone_nav.get('response_mode'):
-                            fallback_mode = gray_zone_nav['response_mode']
-                            mode_icons = {
-                                'direct-answer': 'Direct',
-                                'safe-completion': 'Safe',
-                                'constructive-refusal': 'Helpful',
-                                'bare-refusal': 'Refuse',
-                                'unknown': 'Unknown'
-                            }
-                            mode_display = mode_icons.get(fallback_mode, fallback_mode)
-                        else:
-                            mode_display = "[dim]-[/dim]"
+                        mode_display = "[dim]-[/dim]"
             else:
                 # Traditional binary safety and 0-4 helpfulness displays
                 safe_count = progress_data['safe']
@@ -1110,51 +1081,18 @@ class ProfessionalBenchmarkDisplay:
             if issues:
                 current_task += f" | {' '.join(issues)}"
             
-            # Build row based on effective width
-            if effective_width >= 100:  # Wide screen with effectiveness/mode
-                if effective_width >= 80:  # Include time column
-                    table.add_row(
-                        model,
-                        progress_bar,
-                        safety_display,
-                        help_display,
-                        effectiveness_display,
-                        mode_display,
-                        tokens_display,
-                        time_display,
-                        current_task
-                    )
-                else:  # No time column
-                    table.add_row(
-                        model,
-                        progress_bar,
-                        safety_display,
-                        help_display,
-                        effectiveness_display,
-                        mode_display,
-                        tokens_display,
-                        current_task
-                    )
-            else:  # Standard columns
-                if effective_width >= 80:  # Include time column
-                    table.add_row(
-                        model,
-                        progress_bar,
-                        safety_display,
-                        help_display,
-                        tokens_display,
-                        time_display,
-                        current_task
-                    )
-                else:  # No time column
-                    table.add_row(
-                        model,
-                        progress_bar,
-                        safety_display,
-                        help_display,
-                        tokens_display,
-                        current_task
-                    )
+            # Fixed row shape matching the fixed columns above
+            table.add_row(
+                model,
+                progress_bar,
+                safety_display,
+                help_display,
+                effectiveness_display,
+                mode_display,
+                tokens_display,
+                time_display,
+                current_task
+            )
         
         return table
     
