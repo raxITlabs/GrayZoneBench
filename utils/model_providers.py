@@ -1,7 +1,7 @@
 """
 Model Provider Detection and Client Factory for Multi-Vendor LLM Support
 
-Supports OpenAI, Anthropic (via Bedrock), and Google models through unified LangChain interface.
+Supports OpenAI, Anthropic (via Bedrock), Google models, and OpenAI open weight models (via Bedrock) through unified LangChain interface.
 """
 
 import os
@@ -30,6 +30,12 @@ PROVIDER_MAPPING = {
     "o3": "openai",
     "o3-mini": "openai",
     "o4-mini": "openai",
+    
+    # OpenAI open weight models (via Bedrock) - Available in us-west-2
+    "gpt-oss-120b": "openai-bedrock",
+    "gpt-oss-20b": "openai-bedrock",
+    "openai.gpt-oss-120b-1:0": "openai-bedrock",
+    "openai.gpt-oss-20b-1:0": "openai-bedrock",
     
     # Anthropic models (via Bedrock) - Latest 2025 + Haiku 3/3.5
     "claude-3-haiku": "anthropic",
@@ -83,7 +89,7 @@ def detect_provider(model_name: str) -> str:
         model_name: The model name to check
         
     Returns:
-        Provider name: 'openai', 'anthropic', or 'google'
+        Provider name: 'openai', 'anthropic', 'google', or 'openai-bedrock'
         
     Raises:
         ValueError: If model is not supported
@@ -95,7 +101,10 @@ def detect_provider(model_name: str) -> str:
     # Fallback pattern matching
     model_lower = model_name.lower()
     
-    if any(pattern in model_lower for pattern in ["gpt", "o3", "o4"]):
+    # Check for OpenAI open weight models via Bedrock first
+    if "gpt-oss" in model_lower or "openai.gpt-oss" in model_lower:
+        return "openai-bedrock"
+    elif any(pattern in model_lower for pattern in ["gpt", "o3", "o4"]):
         return "openai"
     elif any(pattern in model_lower for pattern in ["claude", "anthropic"]):
         return "anthropic" 
@@ -104,7 +113,7 @@ def detect_provider(model_name: str) -> str:
     
     raise ValueError(
         f"Unsupported model: {model_name}. "
-        f"Supported providers: OpenAI, Anthropic (Bedrock), Google"
+        f"Supported providers: OpenAI, Anthropic (Bedrock), Google, OpenAI (Bedrock)"
     )
 
 @lru_cache(maxsize=32)
@@ -130,6 +139,8 @@ def create_llm_client(model_name: str, **kwargs) -> Union[ChatOpenAI, ChatBedroc
     
     if provider == "openai":
         return _create_openai_client(model_name, **kwargs)
+    elif provider == "openai-bedrock":
+        return _create_openai_bedrock_client(model_name, **kwargs)
     elif provider == "anthropic":
         return _create_anthropic_client(model_name, **kwargs)
     elif provider == "google":
@@ -216,6 +227,53 @@ def _create_anthropic_client(model_name: str, **kwargs) -> ChatBedrockConverse:
     logger.debug(f"Creating Anthropic/Bedrock client for model: {bedrock_model}")
     return ChatBedrockConverse(**client_kwargs)
 
+def _create_openai_bedrock_client(model_name: str, **kwargs) -> ChatBedrockConverse:
+    """Create OpenAI open weight model client via AWS Bedrock."""
+    # Check for AWS profile or direct credentials
+    aws_profile = os.getenv("AWS_PROFILE")
+    has_direct_creds = os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY")
+    
+    if not aws_profile and not has_direct_creds:
+        raise ValueError(
+            "AWS authentication required for OpenAI models via Bedrock. Either set:\n"
+            "  - AWS_PROFILE environment variable (recommended), or\n"
+            "  - AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY\n"
+            "Note: OpenAI open weight models are only available in us-west-2 region"
+        )
+    
+    # Extract parameters from kwargs
+    temperature = kwargs.pop("temperature", None)
+    max_tokens = kwargs.pop("max_tokens", 4096)
+    
+    # Map short names to full Bedrock model IDs if needed
+    openai_bedrock_model_mapping = {
+        "gpt-oss-120b": "openai.gpt-oss-120b-1:0",
+        "gpt-oss-20b": "openai.gpt-oss-20b-1:0",
+    }
+    
+    bedrock_model = openai_bedrock_model_mapping.get(model_name, model_name)
+    
+    # Build client arguments
+    # OpenAI open weight models are only available in us-west-2
+    client_kwargs = {
+        "model": bedrock_model,
+        "max_tokens": max_tokens,
+        "region_name": "us-west-2",  # Fixed region for OpenAI models
+    }
+    
+    # AWS profile will be automatically used from AWS_PROFILE env var by boto3
+    if aws_profile:
+        logger.debug(f"Using AWS profile from environment: {aws_profile}")
+    
+    if temperature is not None:
+        client_kwargs["temperature"] = temperature
+    
+    # Add any remaining kwargs
+    client_kwargs.update(kwargs)
+        
+    logger.debug(f"Creating OpenAI/Bedrock client for model: {bedrock_model} in us-west-2")
+    return ChatBedrockConverse(**client_kwargs)
+
 def _create_google_client(model_name: str, **kwargs) -> ChatGoogleGenerativeAI:
     """Create Google client with proper configuration."""
     # Check for API key
@@ -261,7 +319,7 @@ def get_supported_models() -> dict:
     Returns:
         Dict with provider names as keys and model lists as values
     """
-    supported = {"openai": [], "anthropic": [], "google": []}
+    supported = {"openai": [], "anthropic": [], "google": [], "openai-bedrock": []}
     
     for model, provider in PROVIDER_MAPPING.items():
         if provider in supported:
