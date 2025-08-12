@@ -327,6 +327,25 @@ def get_supported_models() -> dict:
             
     return supported
 
+def get_provider_display_name(provider: str) -> str:
+    """
+    Get user-friendly display name for a provider.
+    
+    Args:
+        provider: Internal provider name
+        
+    Returns:
+        Display name for the provider
+    """
+    provider_display_mapping = {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic", 
+        "google": "Google",
+        "openai-bedrock": "OpenAI-OSS"
+    }
+    
+    return provider_display_mapping.get(provider, provider.title())
+
 def validate_model_support(model_name: str) -> bool:
     """
     Check if a model is supported.
