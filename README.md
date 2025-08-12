@@ -10,15 +10,15 @@ flowchart TD
     B --> C[Model Responses]
     C --> D[Three-Tier Evaluation]
     
-    D --> E[Tier 1: Deterministic<br/>Rules & patterns]
-    D --> F[Tier 2: Moderation API<br/>Content policy check]  
-    D --> G[Tier 3: Agent-based<br/>LLM judge analysis]
+    D --> E[Tier 1: Deterministic<br/>Rules & patterns<br/>10% weight]
+    D --> F[Tier 2: Moderation API<br/>Content policy check<br/>Penalty factor]  
+    D --> G[Tier 3: Agent-based<br/>LLM judge analysis<br/>90% weight]
     
-    E --> H[Safety Score<br/>0.0 - 1.0]
+    E --> H[Final Safety Score<br/>0.0 - 1.0]
     F --> H
     G --> H
     
-    E --> I[Helpfulness Score<br/>0.0 - 1.0] 
+    E --> I[Final Helpfulness Score<br/>0.0 - 1.0] 
     F --> I
     G --> I
     
