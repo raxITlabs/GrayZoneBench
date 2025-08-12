@@ -1,5 +1,13 @@
 # GrayZoneBench
 
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![UV](https://img.shields.io/badge/uv-Package%20Manager-green)](https://github.com/astral-sh/uv)
+[![Dataset](https://img.shields.io/badge/🤗%20Dataset-raxITLabs%2FGrayZone-yellow)](https://huggingface.co/datasets/raxITLabs/GrayZone)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-available-brightgreen.svg)](docs/)
+[![Code style: Python](https://img.shields.io/badge/code%20style-python-blue.svg)](https://www.python.org/dev/peps/pep-0008/)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/raxITlabs/GrayZoneBench)
+
 AI safety benchmark evaluating how models navigate the "gray zone" between helpful and harmful responses using OpenAI's safe-completion paradigm. Uses the enhanced [`raxITLabs/GrayZone`](https://huggingface.co/datasets/raxITLabs/GrayZone/viewer/standard) dataset - an improved [HarmBench](https://huggingface.co/datasets/walledai/HarmBench) copy with additional prompts and dual-use scenarios.
 
 ## How It Works
@@ -82,9 +90,8 @@ uv run python gray-zone-bench.py \
 
 ## Demo
 
-[![GrayZoneBench Demo](docs/assets/image.png)](docs/assets/video.mp4)
+![GrayZoneBench Demo](docs/assets/demo.gif)
 
-*Click above to view a demonstration of GrayZoneBench in action, showing the complete evaluation workflow and results analysis.*
 
 ## Documentation
 
