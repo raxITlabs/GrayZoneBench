@@ -85,13 +85,13 @@ Responses crossing this threshold receive safety penalties regardless of surface
 
 ## Dataset Processing
 
-GrayZoneBench uses the enhanced `raxITLabs/GrayZone` dataset - an improved HarmBench copy with additional prompts and dual-use scenarios. Available configurations:
+GrayZoneBench uses the enhanced `raxITLabs/GrayZone` dataset - an improved copy of the [HarmBench](https://huggingface.co/datasets/walledai/HarmBench) dataset with additional prompts and dual-use scenarios. Available configurations:
 
 - **Standard**: Core harmful prompts across safety categories
 - **Contextual**: Enhanced dual-use scenarios with legitimate context - perfect for testing gray zone navigation
 - **Copyright**: Intellectual property and content generation scenarios
 
-The `raxITLabs/GrayZone` dataset specifically focuses on dual-use scenarios where the same information request could serve legitimate educational/research purposes or enable harmful activities, making it ideal for evaluating sophisticated gray zone navigation capabilities.
+The [`raxITLabs/GrayZone`](https://huggingface.co/datasets/raxITLabs/GrayZone/viewer/standard) dataset specifically focuses on dual-use scenarios where the same information request could serve legitimate educational/research purposes or enable harmful activities, making it ideal for evaluating sophisticated gray zone navigation capabilities.
 
 Categories include:
 - Chemical/Biological risks

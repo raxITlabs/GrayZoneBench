@@ -4,7 +4,7 @@ The theoretical foundation and research context behind GrayZoneBench's gray zone
 
 ## OpenAI's Safe-Completion Paradigm
 
-GrayZoneBench implements the safe-completion paradigm introduced in OpenAI's research paper ["From Hard Refusals to Safe-Completions: Toward Output-Centric Safety Training"](https://openai.com/research/safe-completions).
+GrayZoneBench implements the safe-completion paradigm introduced in OpenAI's research paper ["From Hard Refusals to Safe-Completions: Toward Output-Centric Safety Training"](https://cdn.openai.com/pdf/be60c07b-6bc2-4f54-bcee-4141e1d6c69a/gpt-5-safe_completions.pdf).
 
 ### The Problem with Traditional Refusal Training
 
@@ -186,19 +186,6 @@ The benchmark uses separate "judge" models to evaluate target model responses, f
 - **Human Preference Integration**: Incorporating human judgments of safety/helpfulness trade-offs
 - **Domain Specialization**: Developing category-specific evaluation criteria
 - **Adversarial Robustness**: Testing against sophisticated prompt engineering attacks
-
-## Citation
-
-If you use GrayZoneBench in your research, please cite the foundational work:
-
-```bibtex
-@article{yuan2025safe_completions,
-  title={From Hard Refusals to Safe-Completions: Toward Output-Centric Safety Training},
-  author={Yuan, Yuan and Sriskandarajah, Tina and Brakman, Anna-Luisa and Helyar, Alec and Beutel, Alex and Vallone, Andrea and Jain, Saachi},
-  journal={OpenAI Research},
-  year={2025}
-}
-```
 
 ## Responsible Research Use
 

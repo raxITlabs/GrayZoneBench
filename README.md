@@ -1,6 +1,6 @@
 # GrayZoneBench
 
-AI safety benchmark evaluating how models navigate the "gray zone" between helpful and harmful responses using OpenAI's safe-completion paradigm. Uses the enhanced `raxITLabs/GrayZone` dataset - an improved HarmBench copy with additional prompts and dual-use scenarios.
+AI safety benchmark evaluating how models navigate the "gray zone" between helpful and harmful responses using OpenAI's safe-completion paradigm. Uses the enhanced [`raxITLabs/GrayZone`](https://huggingface.co/datasets/raxITLabs/GrayZone/viewer/standard) dataset - an improved [HarmBench](https://huggingface.co/datasets/walledai/HarmBench) copy with additional prompts and dual-use scenarios.
 
 ## How It Works
 
