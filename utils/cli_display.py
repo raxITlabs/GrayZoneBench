@@ -18,7 +18,7 @@ console = Console()
 def create_results_table(results: List[Dict[str, Any]]) -> Table:
     """Create a beautiful results summary table"""
     table = Table(
-        title="GrayZoneBench Results",
+        title="Gray Zone Navigation Results",
         box=box.ROUNDED,
         title_style="bold",
         show_header=True,
@@ -104,14 +104,14 @@ def show_config_panel(dataset: str, config: str, models: List[str],
     """Show configuration panel"""
     # Create judge task description
     if judge_task == "both":
-        judge_desc = f"{judge_model} evaluating safety and helpfulness"
-        judge_info = "  Safety: SAFE/UNSAFE rating of response content\n  Helpfulness: 0-4 scale (0=refusal, 4=somewhat helpful)"
+        judge_desc = f"{judge_model} evaluating gray zone navigation (safety + helpfulness)"
+        judge_info = "  Safety: Gray zone navigation effectiveness (0-1 scale)\n  Helpfulness: Safe-completion helpfulness (0-1 scale, displayed as 0-4)"
     elif judge_task == "safety":
-        judge_desc = f"{judge_model} evaluating safety"
-        judge_info = "  Safety: SAFE/UNSAFE rating of response content"
+        judge_desc = f"{judge_model} evaluating gray zone safety navigation"
+        judge_info = "  Safety: Gray zone navigation effectiveness with meaningful facilitation threshold"
     else:
-        judge_desc = f"{judge_model} evaluating helpfulness"
-        judge_info = "  Helpfulness: 0-4 scale (0=refusal, 4=somewhat helpful)"
+        judge_desc = f"{judge_model} evaluating safe-completion helpfulness"
+        judge_info = "  Helpfulness: Safe-completion effectiveness (0-1 scale, displayed as 0-4)"
     
     config_text = f"[bold]Configuration[/bold]\n"
     config_text += f"Dataset: {dataset} ({config})\n"
@@ -127,8 +127,8 @@ def show_config_panel(dataset: str, config: str, models: List[str],
 
 
 def show_completion_panel(output_dir: str, elapsed_time: Optional[str] = None, results: Optional[List[Dict[str, Any]]] = None):
-    """Show completion message with three-tier analysis summary"""
-    completion_text = f"[bold]Three-Tier Analysis Complete[/bold]\n\n"
+    """Show completion message with three-tier gray zone navigation analysis summary"""
+    completion_text = f"[bold]Gray Zone Navigation Analysis Complete[/bold]\n\n"
     
     if elapsed_time:
         completion_text += f"Total time: {elapsed_time}\n\n"
@@ -137,25 +137,30 @@ def show_completion_panel(output_dir: str, elapsed_time: Optional[str] = None, r
     if results:
         total_evaluations = len(results)
         tier_3_completions = sum(1 for r in results if r.get('safety_tier_results', {}).get('agent'))
-        malicious_intents = sum(1 for r in results 
-                              if r.get('safety_tier_results', {}).get('agent', {}).get('raw', {})
-                              .get('intent_classification', {}).get('intent') == 'malicious')
+        gray_zone_scenarios = sum(1 for r in results 
+                                if r.get('safety_tier_results', {}).get('agent', {}).get('raw', {})
+                                .get('gray_zone_navigation', {}).get('gray_zone_type') == 'gray-zone')
+        clear_harmful = sum(1 for r in results 
+                          if r.get('safety_tier_results', {}).get('agent', {}).get('raw', {})
+                          .get('gray_zone_navigation', {}).get('gray_zone_type') == 'clear-harmful')
         
-        completion_text += f"[green]⬜ Analysis Summary[/green]\n"
+        completion_text += f"[green]🟦 Gray Zone Analysis Summary[/green]\n"
         completion_text += f"Total evaluations: {total_evaluations}\n"
         completion_text += f"Three-tier completions: {tier_3_completions}\n"
-        if malicious_intents > 0:
-            completion_text += f"Malicious intents detected: [red]{malicious_intents}[/red]\n"
+        if gray_zone_scenarios > 0:
+            completion_text += f"Gray zone scenarios: [yellow]{gray_zone_scenarios}[/yellow]\n"
+        if clear_harmful > 0:
+            completion_text += f"Clear-harmful scenarios: [red]{clear_harmful}[/red]\n"
         completion_text += "\n"
     
     completion_text += f"[bold]Output Files[/bold]\n"
     completion_text += f"Detailed results: [dim]{output_dir}/results_*.json[/dim]\n"
-    completion_text += f"Agent analysis: [dim]{output_dir}/*_tier_results.json[/dim]\n"
+    completion_text += f"Gray zone analysis: [dim]{output_dir}/*_tier_results.json[/dim]\n"
     completion_text += f"Run logs: [dim]{output_dir}/run.log[/dim]"
     
     console.print(Panel(
         completion_text,
-        title="Three-Tier Evaluation Results",
+        title="Gray Zone Navigation Results",
         box=box.ROUNDED,
         padding=(1, 2)
     ))
@@ -243,24 +248,50 @@ def show_detailed_analysis(results: List[Dict[str, Any]], model_filter: str = No
     console.print(tier_table)
     console.print()
     
-    # Intent classification breakdown
-    if any(intent_stats.values()):
-        intent_table = Table(title="Intent Classification Results", box=box.SIMPLE_HEAD, show_header=True)
-        intent_table.add_column("Intent Type", style="bold")
-        intent_table.add_column("Count", justify="center")
-        intent_table.add_column("Percentage", justify="center")
+    # Gray zone navigation breakdown
+    if any(gray_zone_stats.values()):
+        gray_zone_table = Table(title="Gray Zone Navigation Results", box=box.SIMPLE_HEAD, show_header=True)
+        gray_zone_table.add_column("Scenario Type", style="bold")
+        gray_zone_table.add_column("Count", justify="center")
+        gray_zone_table.add_column("Percentage", justify="center")
         
-        for intent, count in intent_stats.items():
+        total_scenarios = sum(gray_zone_stats.values())
+        for scenario_type, count in gray_zone_stats.items():
             if count > 0:
-                percentage = f"{(count/sum(intent_stats.values()))*100:.1f}%"
-                if intent == 'malicious':
-                    intent_table.add_row(f"[red]🟪 Malicious[/red]", f"[red]{count}[/red]", f"[red]{percentage}[/red]")
-                elif intent == 'legitimate':
-                    intent_table.add_row(f"[green]✓ Legitimate[/green]", f"[green]{count}[/green]", f"[green]{percentage}[/green]")
+                percentage = f"{(count/total_scenarios)*100:.1f}%"
+                if scenario_type == 'clear-harmful':
+                    gray_zone_table.add_row(f"[red]🟥 Clear-Harmful[/red]", f"[red]{count}[/red]", f"[red]{percentage}[/red]")
+                elif scenario_type == 'gray-zone':
+                    gray_zone_table.add_row(f"[yellow]🟧 Gray-Zone[/yellow]", f"[yellow]{count}[/yellow]", f"[yellow]{percentage}[/yellow]")
+                elif scenario_type == 'clear-safe':
+                    gray_zone_table.add_row(f"[green]🟩 Clear-Safe[/green]", f"[green]{count}[/green]", f"[green]{percentage}[/green]")
                 else:
-                    intent_table.add_row(f"[dim]? Unknown[/dim]", str(count), percentage)
+                    gray_zone_table.add_row(f"[dim]? Unknown[/dim]", str(count), percentage)
         
-        console.print(intent_table)
+        console.print(gray_zone_table)
+        console.print()
+    
+    # Response mode breakdown
+    if any(response_mode_stats.values()):
+        response_table = Table(title="Response Mode Distribution", box=box.SIMPLE_HEAD, show_header=True)
+        response_table.add_column("Response Mode", style="bold")
+        response_table.add_column("Count", justify="center")
+        response_table.add_column("Effectiveness", justify="center")
+        
+        total_modes = sum(response_mode_stats.values())
+        for mode, count in response_mode_stats.items():
+            if count > 0:
+                percentage = f"{(count/total_modes)*100:.1f}%"
+                if mode == 'direct-answer':
+                    response_table.add_row(f"[blue]📝 Direct Answer[/blue]", f"[blue]{count}[/blue]", f"[blue]{percentage}[/blue]")
+                elif mode == 'safe-completion':
+                    response_table.add_row(f"[green]🛡️ Safe Completion[/green]", f"[green]{count}[/green]", f"[green]{percentage}[/green]")
+                elif mode == 'constructive-refusal':
+                    response_table.add_row(f"[cyan]🔄 Constructive Refusal[/cyan]", f"[cyan]{count}[/cyan]", f"[cyan]{percentage}[/cyan]")
+                else:
+                    response_table.add_row(f"[dim]? Unknown[/dim]", str(count), percentage)
+        
+        console.print(response_table)
         console.print()
     
     # Severity assessment breakdown
@@ -284,29 +315,40 @@ def show_detailed_analysis(results: List[Dict[str, Any]], model_filter: str = No
         console.print(severity_table)
         console.print()
     
-    # Confidence score analysis
-    if confidence_scores['safety'] or confidence_scores['helpfulness']:
-        conf_text = "[bold]Confidence Analysis[/bold]\n"
+    # Gray zone navigation effectiveness analysis
+    if gray_zone_effectiveness_scores or confidence_scores['safety'] or confidence_scores['helpfulness']:
+        conf_text = "[bold]Gray Zone Navigation Effectiveness[/bold]\n"
+        
+        if gray_zone_effectiveness_scores:
+            avg_effectiveness = sum(gray_zone_effectiveness_scores) / len(gray_zone_effectiveness_scores)
+            conf_text += f"Average effectiveness (safety × helpfulness): {avg_effectiveness:.3f}\n"
+            
+            excellent = sum(1 for x in gray_zone_effectiveness_scores if x > 0.8)
+            good = sum(1 for x in gray_zone_effectiveness_scores if 0.6 < x <= 0.8)
+            fair = sum(1 for x in gray_zone_effectiveness_scores if 0.4 < x <= 0.6)
+            poor = sum(1 for x in gray_zone_effectiveness_scores if x <= 0.4)
+            
+            conf_text += f"Distribution: [green]{excellent} excellent[/green] | [blue]{good} good[/blue] | [yellow]{fair} fair[/yellow] | [red]{poor} poor[/red]\n\n"
         
         if confidence_scores['safety']:
             avg_safety_conf = sum(confidence_scores['safety']) / len(confidence_scores['safety'])
-            conf_text += f"Safety confidence: {avg_safety_conf:.2f} (n={len(confidence_scores['safety'])})\n"
+            conf_text += f"Safety navigation confidence: {avg_safety_conf:.2f} (n={len(confidence_scores['safety'])})\n"
         
         if confidence_scores['helpfulness']:
             avg_help_conf = sum(confidence_scores['helpfulness']) / len(confidence_scores['helpfulness'])
-            conf_text += f"Helpfulness confidence: {avg_help_conf:.2f} (n={len(confidence_scores['helpfulness'])})\n"
+            conf_text += f"Safe-completion confidence: {avg_help_conf:.2f} (n={len(confidence_scores['helpfulness'])})\n"
         
         # Overall system confidence
         all_confs = confidence_scores['safety'] + confidence_scores['helpfulness']
         if all_confs:
             overall_conf = sum(all_confs) / len(all_confs)
             if overall_conf >= 0.8:
-                conf_text += f"[green]Overall system confidence: {overall_conf:.2f} (High reliability)[/green]"
+                conf_text += f"[green]Overall navigation confidence: {overall_conf:.2f} (High reliability)[/green]"
             elif overall_conf >= 0.6:
-                conf_text += f"[yellow]Overall system confidence: {overall_conf:.2f} (Moderate reliability)[/yellow]"
+                conf_text += f"[yellow]Overall navigation confidence: {overall_conf:.2f} (Moderate reliability)[/yellow]"
             else:
-                conf_text += f"[red]Overall system confidence: {overall_conf:.2f} (Review recommended)[/red]"
+                conf_text += f"[red]Overall navigation confidence: {overall_conf:.2f} (Review recommended)[/red]"
         
-        console.print(Panel(conf_text, title="System Confidence Metrics", box=box.ROUNDED))
+        console.print(Panel(conf_text, title="Gray Zone Navigation Metrics", box=box.ROUNDED))
     
-    console.print(f"\n[dim]🟧 Tip: Use filters to analyze specific models: --model-filter gpt-4[/dim]")
+    console.print(f"\n[dim]🟧 Tip: Use filters to analyze specific models for gray zone navigation patterns[/dim]")
