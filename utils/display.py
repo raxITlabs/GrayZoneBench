@@ -77,7 +77,8 @@ class ProfessionalBenchmarkDisplay:
                     'moderation': None, 
                     'agent': None
                 },
-                'intent_classification': None,
+                'gray_zone_navigation': None,
+                'response_modes': {},  # Track response mode counts
                 'confidence_scores': {},
                 'severity_assessment': None,
                 # Rationale storage for dynamic display
@@ -227,22 +228,29 @@ class ProfessionalBenchmarkDisplay:
                 if agent_results and agent_results.get('raw'):
                     raw_data = agent_results['raw']
                     
-                    # Intent classification with rich logging
-                    if raw_data.get('intent_classification'):
-                        intent_data = raw_data['intent_classification']
-                        progress_data['intent_classification'] = {
-                            'intent': intent_data.get('intent'),
-                            'confidence': intent_data.get('confidence'),
-                            'risk_level': intent_data.get('risk_level')
+                    # Gray zone navigation with rich logging
+                    if raw_data.get('gray_zone_navigation'):
+                        nav_data = raw_data['gray_zone_navigation']
+                        progress_data['gray_zone_navigation'] = {
+                            'gray_zone_type': nav_data.get('gray_zone_type'),
+                            'response_mode': nav_data.get('response_mode'),
+                            'navigation_quality': nav_data.get('navigation_quality'),
+                            'safe_completion_effectiveness': nav_data.get('safe_completion_effectiveness')
                         }
                         
-                        # Add contextual log entry for intent detection
-                        intent = intent_data.get('intent', 'unknown')
-                        risk_level = intent_data.get('risk_level', 'unknown')
-                        if intent == 'malicious':
-                            self.activity_log.append(f"{model}: 🟥 Detected malicious intent ({risk_level} risk)")
-                        elif intent == 'legitimate':
-                            self.activity_log.append(f"{model}: 🟩 Classified as legitimate request")
+                        # Add contextual log entry for gray zone navigation
+                        scenario_type = nav_data.get('gray_zone_type', 'unknown')
+                        response_mode = nav_data.get('response_mode', 'unknown')
+                        if scenario_type == 'clear-harmful':
+                            self.activity_log.append(f"{model}: 🟥 Clear-harmful scenario detected ({response_mode} mode)")
+                        elif scenario_type == 'gray-zone':
+                            self.activity_log.append(f"{model}: 🟧 Gray zone scenario ({response_mode} navigation)")
+                        elif scenario_type == 'clear-safe':
+                            self.activity_log.append(f"{model}: 🟩 Clear-safe scenario ({response_mode} response)")
+                        
+                        # Track response mode counts
+                        if response_mode in ['direct-answer', 'safe-completion', 'constructive-refusal']:
+                            progress_data['response_modes'][response_mode] = progress_data['response_modes'].get(response_mode, 0) + 1
                     
                     # Confidence scores from different tiers
                     progress_data['confidence_scores'] = {
@@ -278,19 +286,25 @@ class ProfessionalBenchmarkDisplay:
                         rationale_text = safety_rationale + ' ' + help_rationale
                         
                         insights = []
-                        if "malicious" in rationale_text.lower():
-                            insights.append("🟥 malicious intent")
-                        elif "legitimate" in rationale_text.lower():
-                            insights.append("🟩 legitimate")
+                        if "clear-harmful" in rationale_text.lower():
+                            insights.append("🟥 clear-harmful")
+                        elif "gray-zone" in rationale_text.lower():
+                            insights.append("🟧 gray-zone")
+                        elif "clear-safe" in rationale_text.lower():
+                            insights.append("🟩 clear-safe")
                         
+                        if "safe-completion" in rationale_text.lower():
+                            insights.append("🛡️ safe-completion")
+                        if "direct-answer" in rationale_text.lower():
+                            insights.append("📝 direct-answer")
+                        if "constructive-refusal" in rationale_text.lower():
+                            insights.append("🔄 constructive-refusal")
                         if "alternatives" in rationale_text.lower():
                             insights.append("📋 alternatives provided")
-                        if "refusal" in rationale_text.lower() and "over-protective" in rationale_text.lower():
-                            insights.append("🟪 over-protective")
-                        elif "refusal" in rationale_text.lower():
-                            insights.append("🟦 appropriate refusal")
                         if "educational" in rationale_text.lower():
                             insights.append("📚 educational")
+                        if "meaningful facilitation" in rationale_text.lower():
+                            insights.append("⚠️ meaningful facilitation")
                         if "negligible" in rationale_text.lower():
                             insights.append("🟩 negligible harm")
                         elif "high" in rationale_text.lower() and "harm" in rationale_text.lower():
@@ -313,9 +327,9 @@ class ProfessionalBenchmarkDisplay:
                             if tier_results.get('deterministic'):
                                 det = tier_results['deterministic']
                                 det_log = f"{model}: 🟦 Tier 1 complete"
-                                if det.get('dual_use_detected'):
-                                    signals = det.get('dual_use_signals', [])
-                                    det_log += f" | Dual-use: {', '.join(signals[:2])}"
+                                if det.get('gray_zone_detected'):
+                                    signals = det.get('gray_zone_signals', [])
+                                    det_log += f" | Gray zone: {', '.join(signals[:2])}"
                                 if det.get('refusal_confidence'):
                                     det_log += f" | Refusal: {det['refusal_confidence']:.1%}"
                                 self.activity_log.append(det_log)
@@ -334,12 +348,16 @@ class ProfessionalBenchmarkDisplay:
                             if tier_results.get('agent'):
                                 agent = tier_results['agent']
                                 agent_log = f"{model}: 🟦 Tier 3 complete"
-                                if agent.get('raw', {}).get('intent_classification'):
-                                    intent = agent['raw']['intent_classification'].get('intent', 'unknown')
-                                    if intent == 'malicious':
-                                        agent_log += " | 🟥 Malicious detected"
-                                    elif intent == 'legitimate':
-                                        agent_log += " | 🟩 Legitimate request"
+                                if agent.get('raw', {}).get('gray_zone_navigation'):
+                                    nav = agent['raw']['gray_zone_navigation']
+                                    scenario_type = nav.get('gray_zone_type', 'unknown')
+                                    response_mode = nav.get('response_mode', 'unknown')
+                                    if scenario_type == 'clear-harmful':
+                                        agent_log += " | 🟥 Clear-harmful detected"
+                                    elif scenario_type == 'gray-zone':
+                                        agent_log += f" | 🟧 Gray zone ({response_mode})"
+                                    elif scenario_type == 'clear-safe':
+                                        agent_log += f" | 🟩 Clear-safe ({response_mode})"
                                 if agent.get('raw', {}).get('severity_assessment'):
                                     harm = agent['raw']['severity_assessment'].get('harm_level', '')
                                     if harm == 'negligible':
@@ -417,7 +435,7 @@ class ProfessionalBenchmarkDisplay:
             layout.split_column(
                 Layout(context_header, size=header_height),
                 Layout(name="info_row", size=8),
-                Layout(evaluation_table, size=len(self.models) + 6),
+                Layout(evaluation_table, size=len(self.models) + 7),
                 Layout(name="charts_row", size=charts_height),
                 Layout(current_activity, size=activity_height)
             )
@@ -437,7 +455,7 @@ class ProfessionalBenchmarkDisplay:
             layout.split_column(
                 Layout(context_header, size=header_height),
                 Layout(dataset_info, size=6),
-                Layout(evaluation_table, size=len(self.models) + 6),
+                Layout(evaluation_table, size=len(self.models) + 7),
                 Layout(statistics_panel, size=8),
                 Layout(charts_panel, size=charts_height),
                 Layout(current_activity, size=activity_height)
@@ -534,7 +552,7 @@ class ProfessionalBenchmarkDisplay:
         detailed_safety_scores = []
         detailed_helpfulness_scores = []
         confidence_scores = {'safety': [], 'helpfulness': []}
-        intent_stats = {'malicious': 0, 'legitimate': 0, 'unknown': 0}
+        gray_zone_stats = {'clear-harmful': 0, 'gray-zone': 0, 'clear-safe': 0, 'unknown': 0}
         severity_stats = {'high': 0, 'medium': 0, 'low': 0, 'negligible': 0}
         
         for progress in self.model_progress.values():
@@ -547,12 +565,12 @@ class ProfessionalBenchmarkDisplay:
             if progress['confidence_scores'].get('helpfulness'):
                 confidence_scores['helpfulness'].append(progress['confidence_scores']['helpfulness'])
             
-            # Intent classification stats
-            intent_data = progress.get('intent_classification')
-            if intent_data and intent_data.get('intent'):
-                intent = intent_data['intent']
-                if intent in intent_stats:
-                    intent_stats[intent] += 1
+            # Gray zone navigation stats
+            nav_data = progress.get('gray_zone_navigation')
+            if nav_data and nav_data.get('gray_zone_type'):
+                scenario_type = nav_data['gray_zone_type']
+                if scenario_type in gray_zone_stats:
+                    gray_zone_stats[scenario_type] += 1
             
             # Severity assessment stats
             severity_data = progress.get('severity_assessment')
@@ -583,19 +601,22 @@ class ProfessionalBenchmarkDisplay:
                 else:
                     stats += f"  Helpfulness: [red]{avg_detailed_help:.3f}[/red] (●○○ {avg_help_conf:.2f})\n"
             
-            # Intent classification summary
-            total_intents = sum(intent_stats.values())
-            if total_intents > 0:
-                stats += f"\nIntent Detection:\n"
-                if intent_stats['malicious'] > 0:
-                    pct = (intent_stats['malicious'] / total_intents) * 100
-                    stats += f"  [red]🟪 Malicious: {intent_stats['malicious']} ({pct:.0f}%)[/red]\n"
-                if intent_stats['legitimate'] > 0:
-                    pct = (intent_stats['legitimate'] / total_intents) * 100
-                    stats += f"  [green]✓ Legitimate: {intent_stats['legitimate']} ({pct:.0f}%)[/green]\n"
-                if intent_stats['unknown'] > 0:
-                    pct = (intent_stats['unknown'] / total_intents) * 100
-                    stats += f"  [dim]? Unknown: {intent_stats['unknown']} ({pct:.0f}%)[/dim]\n"
+            # Gray zone navigation summary
+            total_scenarios = sum(gray_zone_stats.values())
+            if total_scenarios > 0:
+                stats += f"\nGray Zone Navigation:\n"
+                if gray_zone_stats['clear-harmful'] > 0:
+                    pct = (gray_zone_stats['clear-harmful'] / total_scenarios) * 100
+                    stats += f"  [red]🟥 Clear-Harmful: {gray_zone_stats['clear-harmful']} ({pct:.0f}%)[/red]\n"
+                if gray_zone_stats['gray-zone'] > 0:
+                    pct = (gray_zone_stats['gray-zone'] / total_scenarios) * 100
+                    stats += f"  [yellow]🟧 Gray-Zone: {gray_zone_stats['gray-zone']} ({pct:.0f}%)[/yellow]\n"
+                if gray_zone_stats['clear-safe'] > 0:
+                    pct = (gray_zone_stats['clear-safe'] / total_scenarios) * 100
+                    stats += f"  [green]🟩 Clear-Safe: {gray_zone_stats['clear-safe']} ({pct:.0f}%)[/green]\n"
+                if gray_zone_stats['unknown'] > 0:
+                    pct = (gray_zone_stats['unknown'] / total_scenarios) * 100
+                    stats += f"  [dim]? Unknown: {gray_zone_stats['unknown']} ({pct:.0f}%)[/dim]\n"
             
             # Severity assessment summary  
             total_severity = sum(severity_stats.values())
@@ -749,11 +770,11 @@ class ProfessionalBenchmarkDisplay:
                     avg_conf = (progress['confidence_scores']['safety'] + progress['confidence_scores']['helpfulness']) / 2
                     confidence_scores.append(avg_conf)
                 
-                # Intent detection accuracy (for validation)
-                if progress.get('intent_classification'):
-                    intent_data = progress['intent_classification']
-                    intent_conf = intent_data.get('confidence', 0)
-                    intent_accuracy_data.append(intent_conf)
+                # Gray zone navigation quality (for validation)
+                if progress.get('gray_zone_navigation'):
+                    nav_data = progress['gray_zone_navigation']
+                    nav_quality = nav_data.get('navigation_quality', 0)
+                    intent_accuracy_data.append(nav_quality)
                 
                 # Three-tier completion tracking
                 if progress['detailed_safety_scores'] and progress['detailed_helpfulness_scores']:
@@ -894,11 +915,11 @@ class ProfessionalBenchmarkDisplay:
     def _create_evaluation_table(self) -> Table:
         """Create comprehensive evaluation table with all details"""
         table = Table(
-            title="Live Safe Completion Results",
+            title="Gray Zone Navigation Results",
             box=box.ROUNDED,
             show_header=True,
             header_style="bold",
-            title_style="bold",
+            title_style="bold cyan",
             expand=True  # Make table responsive to terminal width
         )
         
@@ -914,23 +935,23 @@ class ProfessionalBenchmarkDisplay:
         MAX_CONTENT_WIDTH = 120
         effective_width = min(terminal_width, MAX_CONTENT_WIDTH)
         
-        table.add_column("Model", style="bold")
-        table.add_column("Progress", justify="center")
+        table.add_column("Model", style="bold", width=10, overflow="ellipsis")
+        table.add_column("Progress", justify="center", width=8)
         
         if any_detailed_analysis:
-            table.add_column("Safety", justify="center")
-            table.add_column("Help", justify="center")
-            if effective_width >= 100:  # Only show intent/confidence on wider screens
-                table.add_column("Intent", justify="center")
-                table.add_column("Confidence", justify="center")
+            table.add_column("Safety", justify="center", width=6)
+            table.add_column("Help", justify="center", width=6)
+            if effective_width >= 100:  # Only show effectiveness/mode on wider screens
+                table.add_column("Effectiveness\n(S×H)", justify="center", width=14, overflow="fold")
+                table.add_column("Response Mode", justify="center", width=10, overflow="fold")
         else:
-            table.add_column("Safety", justify="center")
-            table.add_column("SC", justify="center")  # Safe Completion
+            table.add_column("Safety", justify="center", width=6)
+            table.add_column("SC", justify="center", width=6)  # Safe Completion
         
-        table.add_column("Tokens", justify="center")
+        table.add_column("Tokens", justify="center", width=6)
         if effective_width >= 80:  # Only show time column on wider screens
-            table.add_column("Time", justify="center")
-        table.add_column("Current Task")
+            table.add_column("Time", justify="center", width=6)
+        table.add_column("Current Task", width=25, overflow="fold")
         
         # Ensure all models are shown, even if not started yet
         for model in self.models:
@@ -980,34 +1001,37 @@ class ProfessionalBenchmarkDisplay:
                 else:
                     help_display = "[default]-[/default]"
                 
-                # Intent classification and confidence for wider screens
+                # Gray zone effectiveness and response mode for wider screens
                 if effective_width >= 100:
-                    intent_data = progress_data.get('intent_classification')
-                    if intent_data:
-                        intent = intent_data.get('intent', 'unknown')
-                        if intent == 'malicious':
-                            intent_display = "[red]RISK[/red]"
-                        elif intent == 'legitimate':
-                            intent_display = "[green]SAFE[/green]"
-                        else:
-                            intent_display = "[dim]UNKN[/dim]"
+                    # Calculate gray zone effectiveness (safety × helpfulness)
+                    if (progress_data['detailed_safety_scores'] and 
+                        progress_data['detailed_helpfulness_scores']):
+                        avg_safety_val = sum(progress_data['detailed_safety_scores']) / len(progress_data['detailed_safety_scores'])
+                        avg_help_val = sum(progress_data['detailed_helpfulness_scores']) / len(progress_data['detailed_helpfulness_scores'])
+                        effectiveness = avg_safety_val * avg_help_val
                         
-                        # Overall confidence indicator with numerical display
-                        avg_conf = (progress_data['confidence_scores'].get('safety', 0) + 
-                                  progress_data['confidence_scores'].get('helpfulness', 0)) / 2
-                        if avg_conf >= 0.8:
-                            conf_display = f"[green]{avg_conf:.2f}[/green]"
-                        elif avg_conf >= 0.6:
-                            conf_display = f"[yellow]{avg_conf:.2f}[/yellow]"
-                        elif avg_conf >= 0.4:
-                            conf_display = f"[red]{avg_conf:.2f}[/red]"
-                        elif avg_conf > 0:
-                            conf_display = f"[dim]{avg_conf:.2f}[/dim]"
+                        if effectiveness >= 0.7:
+                            effectiveness_display = f"[bold green]{effectiveness:.3f}[/bold green]"
+                        elif effectiveness >= 0.5:
+                            effectiveness_display = f"[bold yellow]{effectiveness:.3f}[/bold yellow]"
                         else:
-                            conf_display = "[dim]0.00[/dim]"
+                            effectiveness_display = f"[bold red]{effectiveness:.3f}[/bold red]"
                     else:
-                        intent_display = "[dim]-[/dim]"
-                        conf_display = "[dim]-[/dim]"
+                        effectiveness_display = "[dim]-[/dim]"
+                    
+                    # Get dominant response mode
+                    response_modes = progress_data.get('response_modes', {})
+                    if response_modes:
+                        dominant_mode = max(response_modes.items(), key=lambda x: x[1])[0]
+                        mode_icons = {
+                            'direct-answer': 'Direct',
+                            'safe-completion': 'Safe',
+                            'constructive-refusal': 'Refusal',
+                            'unknown': 'Unknown'
+                        }
+                        mode_display = mode_icons.get(dominant_mode, dominant_mode)
+                    else:
+                        mode_display = "[dim]-[/dim]"
             else:
                 # Traditional binary safety and 0-4 helpfulness displays
                 safe_count = progress_data['safe']
@@ -1073,15 +1097,15 @@ class ProfessionalBenchmarkDisplay:
                 current_task += f" | {' '.join(issues)}"
             
             # Build row based on effective width
-            if effective_width >= 100:  # Wide screen with intent/confidence
+            if effective_width >= 100:  # Wide screen with effectiveness/mode
                 if effective_width >= 80:  # Include time column
                     table.add_row(
                         model,
                         progress_bar,
                         safety_display,
                         help_display,
-                        intent_display,
-                        conf_display,
+                        effectiveness_display,
+                        mode_display,
                         tokens_display,
                         time_display,
                         current_task
@@ -1092,8 +1116,8 @@ class ProfessionalBenchmarkDisplay:
                         progress_bar,
                         safety_display,
                         help_display,
-                        intent_display,
-                        conf_display,
+                        effectiveness_display,
+                        mode_display,
                         tokens_display,
                         current_task
                     )
@@ -1179,10 +1203,7 @@ class ProfessionalBenchmarkDisplay:
             total_tokens_out = sum(p['tokens_out'] for p in self.model_progress.values())
             
             activity = f"[green]■ Safe Completion Evaluation Complete![/green]\n\n"
-            activity += f"[default]Duration:[/default] {elapsed_str}\n"
-            activity += f"[default]Safety:[/default] [green]{total_safe} safe[/green] / [red]{total_unsafe} unsafe[/red]\n"
-            activity += f"[default]Tokens:[/default] [yellow]{total_tokens_in:,}[/yellow] in → [white]{total_tokens_out:,}[/white] out\n"
-            activity += f"[dim]Performance:[/dim] {self.performance_metrics['requests_per_second']:.1f} req/sec, {self.performance_metrics['tokens_per_second']:.0f} tok/sec"
+            activity += f"[default]Duration:[/default] {elapsed_str}"
             
             # Enhanced model helpfulness analysis
             if len(self.models) > 1:
@@ -1318,15 +1339,15 @@ class ProfessionalBenchmarkDisplay:
                         det_result = tier_results['deterministic']
                         refusal_conf = det_result.get('refusal_confidence', 0)
                         alternatives = det_result.get('alternatives_provided', False)
-                        dual_use = det_result.get('dual_use_detected', False)
+                        gray_zone = det_result.get('gray_zone_detected', False)
                         
                         activity += f"  [blue]Tier 1 - Deterministic:[/blue]\n"
                         activity += f"    Refusal confidence: {refusal_conf:.1%}\n"
                         if alternatives:
                             activity += f"    ✓ Alternatives provided\n"
-                        if dual_use:
-                            signals = ', '.join(det_result.get('dual_use_signals', [])[:3])
-                            activity += f"    🟪 Dual-use detected: {signals}\n"
+                        if gray_zone:
+                            signals = ', '.join(det_result.get('gray_zone_signals', [])[:3])
+                            activity += f"    🟧 Gray zone detected: {signals}\n"
                     
                     # Tier 2: Moderation
                     if tier_results.get('moderation'):
@@ -1347,10 +1368,12 @@ class ProfessionalBenchmarkDisplay:
                         activity += f"  [cyan]Tier 3 - LangGraph Agents:[/cyan]\n"
                         
                         # Extract key insights
-                        if "malicious" in rationale.lower():
-                            activity += f"    🟥 Intent: Malicious request detected\n"
-                        elif "legitimate" in rationale.lower():
-                            activity += f"    🟩 Intent: Legitimate request\n"
+                        if "clear-harmful" in rationale.lower():
+                            activity += f"    🟥 Scenario: Clear-harmful detected\n"
+                        elif "gray-zone" in rationale.lower():
+                            activity += f"    🟧 Scenario: Gray zone navigation\n"
+                        elif "clear-safe" in rationale.lower():
+                            activity += f"    🟩 Scenario: Clear-safe request\n"
                         
                         if "negligible" in rationale.lower():
                             activity += f"    🟩 Harm level: Negligible risk\n"
@@ -1369,22 +1392,25 @@ class ProfessionalBenchmarkDisplay:
             # Enhanced three-tier insights at bottom
             if self.total_completed > 0:
                 # Calculate comprehensive three-tier stats
-                malicious_count = 0
-                legitimate_count = 0
+                clear_harmful_count = 0
+                gray_zone_count = 0
+                clear_safe_count = 0
                 high_harm_count = 0
                 negligible_harm_count = 0
                 high_confidence_count = 0
                 detailed_analysis_count = 0
                 
                 for model_data in self.model_progress.values():
-                    # Intent classification
-                    intent_data = model_data.get('intent_classification')
-                    if intent_data:
-                        intent = intent_data.get('intent')
-                        if intent == 'malicious':
-                            malicious_count += 1
-                        elif intent == 'legitimate':
-                            legitimate_count += 1
+                    # Gray zone navigation
+                    nav_data = model_data.get('gray_zone_navigation')
+                    if nav_data:
+                        scenario_type = nav_data.get('gray_zone_type')
+                        if scenario_type == 'clear-harmful':
+                            clear_harmful_count += 1
+                        elif scenario_type == 'gray-zone':
+                            gray_zone_count += 1
+                        elif scenario_type == 'clear-safe':
+                            clear_safe_count += 1
                     
                     # Severity assessment 
                     severity_data = model_data.get('severity_assessment')
@@ -1408,8 +1434,8 @@ class ProfessionalBenchmarkDisplay:
                 activity += f"\n[dim]System Performance:[/dim]\n"
                 activity += f"  Throughput: {self.performance_metrics['tokens_per_second']:.0f} tok/sec | Success: {self.performance_metrics['success_rate']:.0f}%\n"
                 
-                if malicious_count > 0 or legitimate_count > 0:
-                    activity += f"  Intent Analysis: [green]{legitimate_count}✓[/green] legitimate | [red]{malicious_count}🟪[/red] malicious\n"
+                if clear_harmful_count > 0 or gray_zone_count > 0 or clear_safe_count > 0:
+                    activity += f"  Gray Zone Navigation: [green]{clear_safe_count}🟩[/green] safe | [yellow]{gray_zone_count}🟧[/yellow] gray | [red]{clear_harmful_count}🟥[/red] harmful\n"
                 
                 if high_harm_count > 0 or negligible_harm_count > 0:
                     activity += f"  Harm Assessment: [red]{high_harm_count}🟥[/red] high | [green]{negligible_harm_count}🟩[/green] negligible\n"
@@ -1777,19 +1803,19 @@ CRITICAL: Maximum 20 words total. Be ultra-concise."""
         # Collect detailed analysis data
         detailed_safety_scores = []
         detailed_helpfulness_scores = []
-        intent_stats = {'malicious': 0, 'legitimate': 0, 'unknown': 0}
+        gray_zone_stats = {'clear-harmful': 0, 'gray-zone': 0, 'clear-safe': 0, 'unknown': 0}
         severity_stats = {'high': 0, 'medium': 0, 'low': 0, 'negligible': 0}
         
         for progress in self.model_progress.values():
             detailed_safety_scores.extend(progress['detailed_safety_scores'])
             detailed_helpfulness_scores.extend(progress['detailed_helpfulness_scores'])
             
-            # Intent classification
-            intent_data = progress.get('intent_classification')
-            if intent_data and intent_data.get('intent'):
-                intent = intent_data['intent']
-                if intent in intent_stats:
-                    intent_stats[intent] += 1
+            # Gray zone navigation
+            nav_data = progress.get('gray_zone_navigation')
+            if nav_data and nav_data.get('gray_zone_type'):
+                scenario_type = nav_data['gray_zone_type']
+                if scenario_type in gray_zone_stats:
+                    gray_zone_stats[scenario_type] += 1
             
             # Severity assessment
             tier_results = progress.get('tier_results', {})
@@ -1844,9 +1870,9 @@ CRITICAL: Maximum 20 words total. Be ultra-concise."""
             # Worst overall (lowest combined score)
             worst_overall = min(model_scores.items(), key=lambda x: x[1]['combined'])
         
-        # Determine dominant intent
-        total_intents = sum(intent_stats.values())
-        dominant_intent = "Analyzing" if total_intents == 0 else max(intent_stats.items(), key=lambda x: x[1])[0]
+        # Determine dominant gray zone type
+        total_scenarios = sum(gray_zone_stats.values())
+        dominant_scenario = "Analyzing" if total_scenarios == 0 else max(gray_zone_stats.items(), key=lambda x: x[1])[0]
         
         # Determine dominant harm level
         total_harm = sum(severity_stats.values())
@@ -1879,9 +1905,9 @@ CRITICAL: Maximum 20 words total. Be ultra-concise."""
         )
         
         summary_table.add_row(
-            "Intent",
-            dominant_intent.title() if dominant_intent != "Analyzing" else "Analyzing",
-            "🟩 Safe" if dominant_intent == "legitimate" else "🟥 Risk" if dominant_intent == "malicious" else "🟧 Unknown" if dominant_intent == "unknown" else "⬜ Pending"
+            "Gray Zone",
+            dominant_scenario.replace('-', ' ').title() if dominant_scenario != "Analyzing" else "Analyzing",
+            "🟩 Safe" if dominant_scenario == "clear-safe" else "🟥 Risk" if dominant_scenario == "clear-harmful" else "🟧 Gray Zone" if dominant_scenario == "gray-zone" else "⬜ Pending"
         )
         
         summary_table.add_row(
