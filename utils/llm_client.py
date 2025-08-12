@@ -119,9 +119,50 @@ def call_llm_response(model: str, text: Optional[str] = None, max_tokens: int = 
     # Extract response text
     text_out = ""
     if hasattr(response, 'content') and response.content:
-        text_out = response.content.strip()
+        # Handle OpenAI Bedrock models which have a different response structure
+        if provider == "openai-bedrock":
+            # OpenAI Bedrock returns content as nested structure with reasoningContent and text
+            import re
+            
+            content = response.content
+            if isinstance(content, str):
+                # If content is already a string, strip reasoning tags if present
+                text_out = re.sub(r'<reasoning>.*?</reasoning>', '', content, flags=re.DOTALL).strip()
+            elif isinstance(content, list) and len(content) > 0:
+                # Look for the text content item (type: "text") in the array
+                for item in content:
+                    if isinstance(item, dict):
+                        # Check for type: "text" content item
+                        if item.get('type') == 'text' and 'text' in item:
+                            raw_text = item['text'].strip()
+                            # Strip <reasoning>...</reasoning> tags from the response
+                            text_out = re.sub(r'<reasoning>.*?</reasoning>', '', raw_text, flags=re.DOTALL).strip()
+                            break
+                        elif 'text' in item:
+                            # Fallback for items without type field
+                            raw_text = item['text'].strip()
+                            text_out = re.sub(r'<reasoning>.*?</reasoning>', '', raw_text, flags=re.DOTALL).strip()
+                            break
+                    elif isinstance(item, str):
+                        # If we find a string item, strip reasoning tags
+                        text_out = re.sub(r'<reasoning>.*?</reasoning>', '', item, flags=re.DOTALL).strip()
+                        break
+                        
+                # Additional debug logging for OpenAI Bedrock responses
+                if not text_out:
+                    logger.debug(f"OpenAI Bedrock content parsing failed. Content structure: {content}")
+            else:
+                # Log the structure to help debug
+                logger.debug(f"OpenAI Bedrock unexpected content structure: {content}")
+        else:
+            # Standard extraction for other providers
+            text_out = response.content.strip()
     else:
         logger.warning(f"Empty response from {provider}/{model}")
+        # Add debug logging for empty responses to help troubleshoot
+        logger.debug(f"Response object attributes: {dir(response)}")
+        if hasattr(response, '__dict__'):
+            logger.debug(f"Response dict: {response.__dict__}")
     
     # Extract usage information
     usage = {}

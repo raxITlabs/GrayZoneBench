@@ -607,10 +607,10 @@ class ProfessionalBenchmarkDisplay:
     
     def _create_configuration_panel(self) -> Panel:
         """Create comprehensive configuration overview"""
-        from utils.model_providers import detect_provider
+        from utils.model_providers import detect_provider, get_provider_display_name
         
-        config_text = f"Evaluation Configuration\n\n"
-        config_text += f"Models: {len(self.models)} models\n"
+        # config_text = f"Evaluation Configuration\n\n"
+        config_text = f"Models: {len(self.models)} models\n"
         
         # Group models by vendor
         vendor_counts = {}
@@ -619,7 +619,7 @@ class ProfessionalBenchmarkDisplay:
         for model in self.models:
             try:
                 provider = detect_provider(model)
-                vendor_name = provider.title()  # openai -> OpenAI
+                vendor_name = get_provider_display_name(provider)
                 
                 if vendor_name not in vendor_counts:
                     vendor_counts[vendor_name] = 0
@@ -675,7 +675,7 @@ class ProfessionalBenchmarkDisplay:
         
         return Panel(
             config_text,
-            title="[bold]Configuration[/bold]",
+            title="[bold]In-Scope Models[/bold]",
             box=box.ROUNDED,
             # style="yellow"
         )
@@ -901,7 +901,7 @@ class ProfessionalBenchmarkDisplay:
     def _create_evaluation_table(self) -> Table:
         """Create comprehensive evaluation table with all details"""
         table = Table(
-            title="Gray Zone Navigation Results",
+            title="Results",
             box=box.ROUNDED,
             show_header=True,
             header_style="bold",
@@ -915,17 +915,17 @@ class ProfessionalBenchmarkDisplay:
         # Use the same fixed width as the main layout (no responsiveness)
         effective_width = self.max_content_width
         
-        table.add_column("Model", style="bold", width=13, overflow="ellipsis")
-        table.add_column("Progress", justify="center", width=8)
+        table.add_column("Model", style="bold", width=16, overflow="ellipsis")
+        table.add_column("Progress", justify="center", width=9)
         
         # Fixed set of columns to avoid layout changes across terminal sizes
         table.add_column("Safety", justify="center", width=7)
         table.add_column("Help", justify="center", width=6)
-        table.add_column("Effectiveness\n(S×H)", justify="center", width=12, overflow="fold")
+        table.add_column("Effectiveness\n(S×H)", justify="center", width=11, overflow="fold")
         table.add_column("Response Mode", justify="center", width=10, overflow="fold")
         table.add_column("Tokens", justify="center", width=8)
         table.add_column("Time", justify="center", width=6)
-        table.add_column("Current Task", width=25, overflow="fold")
+        table.add_column("Current Task", width=23, overflow="fold")
         
         # Ensure all models are shown, even if not started yet
         for model in self.models:
@@ -965,13 +965,13 @@ class ProfessionalBenchmarkDisplay:
                 
                 if progress_data['detailed_helpfulness_scores']:
                     avg_help_detailed = sum(progress_data['detailed_helpfulness_scores']) / len(progress_data['detailed_helpfulness_scores'])
-                    help_conf = progress_data['confidence_scores'].get('helpfulness', 0)
-                    if help_conf >= 0.8:
-                        help_display = f"[cyan]{avg_help_detailed:.2f}[/cyan]"
-                    elif help_conf >= 0.6:
+                    # Color based on helpfulness value, not confidence
+                    if avg_help_detailed >= 0.7:
+                        help_display = f"[green]{avg_help_detailed:.2f}[/green]"
+                    elif avg_help_detailed >= 0.4:
                         help_display = f"[yellow]{avg_help_detailed:.2f}[/yellow]"
                     else:
-                        help_display = f"[dim]{avg_help_detailed:.2f}[/dim]"
+                        help_display = f"[red]{avg_help_detailed:.2f}[/red]"
                 else:
                     help_display = "[default]-[/default]"
                 

@@ -20,6 +20,15 @@ export AWS_SECRET_ACCESS_KEY="your_secret_key"
 export AWS_REGION="us-east-1"
 ```
 
+**OpenAI Open Weight Models via AWS Bedrock (gpt-oss series):**
+```bash
+export AWS_PROFILE="your_aws_profile"
+# OR
+export AWS_ACCESS_KEY_ID="your_access_key"
+export AWS_SECRET_ACCESS_KEY="your_secret_key"
+# Note: These models are only available in us-west-2 region
+```
+
 **Google Models (Gemini series):**
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account.json"
@@ -202,6 +211,12 @@ Custom log file path (default: `out/harmbench_<config>/run.log`).
 - `o1-preview`, `o1-mini` (reasoning models)
 - `o3-mini` (reasoning model)
 
+### OpenAI Open Weight Models (via AWS Bedrock)
+- `gpt-oss-120b` - 120B parameter open weight model
+- `gpt-oss-20b` - 20B parameter open weight model
+- *Available only in us-west-2 region*
+- *Requires AWS Bedrock access*
+
 ### Anthropic (via Bedrock)
 - `claude-3-opus`
 - `claude-3-sonnet`, `claude-3-haiku`
@@ -247,6 +262,17 @@ uv run python gray-zone-bench.py \
   --hf-config contextual \
   --context-column context \
   --num-prompts 50
+```
+
+### OpenAI Open Weight Models Evaluation
+```bash
+# Evaluate OpenAI open weight models via AWS Bedrock
+uv run python gray-zone-bench.py \
+  --models gpt-oss-120b gpt-oss-20b \
+  --judge-model gpt-5-mini \
+  --judge-task both \
+  --hf-dataset raxITLabs/GrayZone \
+  --num-prompts 10
 ```
 
 ### Category-Specific Research
