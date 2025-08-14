@@ -38,9 +38,9 @@ openai-safety-bench/
    ```
    Framework Preset: Next.js
    Root Directory: site
-   Build Command: pnpm run build
+   Build Command: (leave default - uses vercel.json)
    Output Directory: (leave default)
-   Install Command: pnpm install
+   Install Command: (leave default - uses vercel.json)
    ```
 
 3. **Advanced Settings:**

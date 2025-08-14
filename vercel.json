@@ -1,15 +1,12 @@
 {
   "version": 2,
   "name": "grayzonebench-dashboard",
-  "framework": "nextjs",
   "buildCommand": "cd site && pnpm run build",
-  "devCommand": "cd site && pnpm run dev",
+  "devCommand": "cd site && pnpm run dev", 
   "installCommand": "cd site && pnpm install",
   "outputDirectory": "site/.next",
-  "rootDirectory": "site",
-  "nodeVersion": "20.x",
   "functions": {
-    "app/results/page.tsx": {
+    "site/app/results/page.tsx": {
       "maxDuration": 30
     }
   },
