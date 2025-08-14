@@ -1,24 +1,23 @@
+// next.config.ts (in site/)
 import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
   experimental: {
-    useCache: true, // Enable 'use cache' directive
-    cacheComponents: true, // Enable dynamic IO for enhanced caching
+    useCache: true,
+    cacheComponents: true,
   },
-  // Enable transpilation of local packages for monorepo setup
   transpilePackages: [],
-  // Optimize for Vercel deployment
-  output: 'standalone',
-  // Configure for monorepo - include files from parent directories
-  outputFileTracingRoot: path.join(__dirname, '../'),
-  // Configure Turbopack for monorepo module resolution
-  turbopack: {
-    root: path.join(__dirname, '../'),
-  },
-  // Ensure environment variables are handled correctly
-  env: {
-    NEXT_TELEMETRY_DISABLED: '1',
+  output: "standalone",
+
+  env: { NEXT_TELEMETRY_DISABLED: "1" },
+
+  webpack(config) {
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      "@": path.resolve(__dirname), // makes "@/lib/utils" → "<site>/lib/utils"
+    };
+    return config;
   },
 };
 
