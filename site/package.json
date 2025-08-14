@@ -6,16 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "build:prod": "NODE_ENV=production next build",
-    "analyze": "ANALYZE=true next build",
-    "type-check": "tsc --noEmit",
-    "validate-deployment": "node scripts/validate-deployment.js",
-    "predeploy": "pnpm run validate-deployment && pnpm run type-check && pnpm run build"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-
+    "lint": "next lint"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.16.0",
