@@ -1,6 +1,6 @@
 {
-    "buildCommand": "cd site && pnpm run build",
-    "outputDirectory": "site/.next",
-    "installCommand": "cd site && pnpm install",
-    "devCommand": "cd site && pnpm run dev"
-  }
+    "buildCommand": "cd site && npm run build",
+    "outputDirectory": "site/.next", 
+    "installCommand": "cd site && npm install",
+    "devCommand": "cd site && npm run dev"
+}
