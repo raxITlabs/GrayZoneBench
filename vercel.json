@@ -1,9 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "cd site && pnpm run build",
-  "outputDirectory": "site/.next",
   "functions": {
-    "site/app/results/page.tsx": {
+    "app/results/page.tsx": {
       "maxDuration": 30
     }
   },
