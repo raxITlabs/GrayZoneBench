@@ -152,11 +152,16 @@ AWS_SECRET_ACCESS_KEY=your_secret_key
 AWS_REGION=us-east-1
 ```
 
-**Google:**
+**Google (for Gemini models):**
 ```bash
-GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
-GOOGLE_CLOUD_PROJECT=your_project_id
-GOOGLE_CLOUD_LOCATION=us-central1
+GOOGLE_API_KEY=your_google_api_key_here
+```
+
+**Google Cloud Storage (Optional - for automatic result uploads):**
+```bash
+# Paste entire service account JSON as single line
+GCS_SERVICE_ACCOUNT='{"type":"service_account","project_id":"..."}'
+GCS_BUCKET_NAME=grayzonebench-results
 ```
 
 ## Output Structure
@@ -171,6 +176,20 @@ out/
 │   │   └── row000001.judge.response.json  # Judge evaluation with tier results
 │   ├── results_2025-08-12T07-04-35.json  # Aggregate results with detailed scores
 │   └── run.log                            # Execution logs
+```
+
+When GCS is configured, results are also uploaded to:
+```
+gs://your-bucket/
+├── runs/
+│   └── 2025-01-14T10-30-00/              # Timestamped run
+│       ├── results.json                   # Aggregate results
+│       └── models/                        # Individual model outputs
+│           └── gpt-5-mini/
+│               └── *.json
+├── latest/
+│   └── results.json                       # Most recent run results
+└── index.json                            # Index of all runs
 ```
 
 Each sample generates three files:

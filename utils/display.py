@@ -49,6 +49,9 @@ class ProfessionalBenchmarkDisplay:
         self.total_requests_made = 0
         self.avg_response_time = 0.0
         self.throughput_history = []  # (timestamp, tokens_per_second)
+        
+        # GCS upload status tracking
+        self.gcs_status = None
         self.error_count = 0
         self.blocked_count = 0
         
@@ -375,6 +378,22 @@ class ProfessionalBenchmarkDisplay:
                 progress_data['current_tier'] = 'complete'
                 duration = progress_data['end_time'] - progress_data['start_time']
                 self.activity_log.append(f"{model}: 🟩 Completed all evaluations in {self._format_duration(duration)}")
+    
+    def set_gcs_status(self, gcs_status: Dict[str, Any]):
+        """Set the GCS upload status for display in completion panel"""
+        self.gcs_status = gcs_status
+        
+        # Add to activity log
+        if gcs_status and gcs_status.get('configured'):
+            if gcs_status.get('uploading'):
+                self.activity_log.append(f"☁️ GCS Upload: Starting upload to cloud storage...")
+            elif gcs_status.get('success'):
+                files_count = gcs_status.get('files_uploaded', 0)
+                bucket = gcs_status.get('bucket_name', 'unknown')
+                self.activity_log.append(f"☁️ GCS Upload: {files_count} files uploaded to {bucket}")
+            else:
+                error = gcs_status.get('error', 'unknown error')
+                self.activity_log.append(f"☁️ GCS Upload: Failed - {error}")
     
     def generate_display(self) -> Layout:
         """Generate the comprehensive professional dashboard with simple left-aligned layout"""
@@ -1187,6 +1206,25 @@ class ProfessionalBenchmarkDisplay:
                 if model_stats:
                     best_model = model_stats[0]
                     activity += f"\n[default]Best Safe Completion:[/default] [magenta]{best_model[0]}[/magenta] [default](optimal safe refusals)[/default]"
+            
+            # Add GCS upload status to completion display
+            if self.gcs_status:
+                activity += f"\n\n[bold blue]■ Cloud Storage[/bold blue]\n"
+                if self.gcs_status.get('uploading'):
+                    message = self.gcs_status.get('message', 'Uploading results to Google Cloud Storage...')
+                    activity += f"[yellow]⏳ {message}[/yellow]"
+                elif self.gcs_status.get('success'):
+                    files_count = self.gcs_status.get('files_uploaded', 0)
+                    bucket = self.gcs_status.get('bucket_name', 'unknown')
+                    console_url = self.gcs_status.get('console_url', '')
+                    activity += f"[green]✓ {files_count} files uploaded to {bucket}[/green]\n"
+                    if console_url:
+                        activity += f"[dim]View: {console_url}[/dim]"
+                elif self.gcs_status.get('configured'):
+                    error = self.gcs_status.get('error', 'Unknown error')
+                    activity += f"[red]✗ Upload failed: {error}[/red]"
+                else:
+                    activity += f"[dim]Not configured[/dim]"
         else:
             # Enhanced activity feed with better formatting
             activity = f"[bold cyan]■ Live Safe Completion Feed[/bold cyan]\n\n"

@@ -470,6 +470,41 @@ def main():
                     # Update live display with final result
                     live_display.update_progress(model, prompt_info, 'complete', result_item)
                     live.update(live_display.generate_display())
+            
+            # Save detailed results as JSON (inside live display context)
+            results_file = root / f"results_{now_iso().replace(':','-')}.json"
+            with open(results_file, 'w', encoding='utf-8') as f:
+                json.dump(all_results, f, indent=2, ensure_ascii=False, cls=ScoreBreakdownEncoder)
+            
+            # Check if GCS upload is configured and show upload progress
+            gcs_status = None
+            import os
+            if os.getenv("GCS_SERVICE_ACCOUNT") and os.getenv("GCS_BUCKET_NAME"):
+                # Show upload starting
+                live_display.set_gcs_status({'uploading': True, 'configured': True})
+                live.update(live_display.generate_display())
+                
+                # Upload to GCS (complete upload each run for simplicity and reliability)
+                def progress_callback(message):
+                    live_display.set_gcs_status({'uploading': True, 'configured': True, 'message': message})
+                    live.update(live_display.generate_display())
+                
+                try:
+                    from utils.gcs_uploader import upload_results
+                    gcs_status = upload_results(root, results_file, all_results, progress_callback)
+                except Exception as e:
+                    # Silent fail - GCS upload is optional
+                    gcs_status = {'success': False, 'configured': True, 'error': str(e)}
+                    logger.debug(f"GCS upload skipped: {e}")
+                
+                # Update display with final GCS status
+                if gcs_status:
+                    live_display.set_gcs_status(gcs_status)
+                    live.update(live_display.generate_display())
+                    
+                    # Brief pause to let users see the final status with GCS upload info
+                    import time
+                    time.sleep(3)  # Reduced since we now show progress
     else:
         # Use simple progress bar for debug/info modes
         with Progress(
@@ -697,13 +732,24 @@ def main():
         # Show completion message
         show_completion_panel(str(root), elapsed_str)
     
-    # Save detailed results as JSON for further analysis (but don't mention prominently)
-    results_file = root / f"results_{now_iso().replace(':','-')}.json"
-    with open(results_file, 'w', encoding='utf-8') as f:
-        json.dump(all_results, f, indent=2, ensure_ascii=False, cls=ScoreBreakdownEncoder)
+    # Save detailed results and upload to GCS for non-live display modes
+    if not use_live_display:
+        # Save detailed results as JSON
+        results_file = root / f"results_{now_iso().replace(':','-')}.json"
+        with open(results_file, 'w', encoding='utf-8') as f:
+            json.dump(all_results, f, indent=2, ensure_ascii=False, cls=ScoreBreakdownEncoder)
+        
+        # Upload to GCS if configured (complete upload each run for simplicity and reliability)
+        try:
+            from utils.gcs_uploader import upload_results
+            upload_results(root, results_file, all_results)
+        except Exception as e:
+            # Silent fail - GCS upload is optional
+            logger.debug(f"GCS upload skipped: {e}")
     
     if args.debug and not use_live_display:
-        console.print(f"[dim]Detailed results: {results_file}[/dim]")
+        # Show results file path for debug mode
+        console.print(f"[dim]Detailed results saved to: {root}/results_*.json[/dim]")
 
 if __name__ == "__main__":
     main()
