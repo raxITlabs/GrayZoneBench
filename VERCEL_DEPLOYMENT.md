@@ -107,8 +107,10 @@ openai-safety-bench/
 ### Performance Optimization
 
 The deployment includes:
-- ✅ Next.js 15 canary with caching
+- ✅ Next.js 15 canary with caching and standalone output
 - ✅ Server-side data fetching with 'use cache'
+- ✅ Proper monorepo TypeScript path resolution
+- ✅ Transpilation support for local packages
 - ✅ Optimized bundle splitting
 - ✅ Security headers configured
 
