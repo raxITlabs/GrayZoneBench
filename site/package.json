@@ -1,0 +1,48 @@
+{
+  "name": "site",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "build:prod": "NODE_ENV=production next build",
+    "analyze": "ANALYZE=true next build",
+    "type-check": "tsc --noEmit",
+    "validate-deployment": "node scripts/validate-deployment.js",
+    "predeploy": "pnpm run validate-deployment && pnpm run type-check && pnpm run build"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "dependencies": {
+    "@google-cloud/storage": "^7.16.0",
+    "@radix-ui/react-progress": "^1.1.7",
+    "@radix-ui/react-separator": "^1.1.7",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@tanstack/react-table": "^8.21.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.539.0",
+    "next": "15.4.2-canary.46",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "recharts": "^3.1.2",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@tailwindcss/postcss": "^4.1.11",
+    "@types/node": "^20.19.10",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "eslint": "^9.33.0",
+    "eslint-config-next": "15.4.2-canary.46",
+    "tailwindcss": "^4.1.11",
+    "tw-animate-css": "^1.3.6",
+    "typescript": "^5.9.2"
+  }
+}
