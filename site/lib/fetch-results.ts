@@ -147,7 +147,12 @@ export async function fetchModelResults(timestamp: string, model: string): Promi
     });
     
     // Group files by row ID
-    const filesByRow = new Map<string, { response?: any; judge?: any; summary?: any }>();
+    interface RowFiles {
+      response?: ModelResponse;
+      judge?: ThreeTierEvaluation;
+      summary?: string;
+    }
+    const filesByRow = new Map<string, RowFiles>();
     
     for (const file of files) {
       const fileName = file.name.split('/').pop();
@@ -236,7 +241,8 @@ export async function fetchSpecificRun(timestamp: string) {
 /**
  * Calculate enhanced model statistics from complete results
  */
-export function calculateModelStats(results: CompleteModelResult[]): ModelStats[] {
+export async function calculateModelStats(results: CompleteModelResult[]): Promise<ModelStats[]> {
+  'use cache'
   const modelGroups = results.reduce((acc, result) => {
     if (!acc[result.model]) {
       acc[result.model] = [];

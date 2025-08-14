@@ -1,152 +1,188 @@
 /**
- * GrayZoneBench Results Viewer
- * Fetches and displays benchmark results from Google Cloud Storage
- * Uses server-side rendering with Next.js canary caching
+ * Enhanced GrayZoneBench Results Dashboard
+ * Professional interface with three-tier evaluation visualization
+ * WCAG AAA compliant with mobile-first responsive design
  */
 
-import { fetchLatestResults, fetchRunsList } from '@/lib/fetch-results';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+'use client';
+
+import React, { useState, useEffect, Suspense } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
-import { ModelPerformanceCharts } from '@/components/charts/ModelPerformanceCharts';
-import { Shield, Database, Clock, TrendingUp, BarChart3 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { AccessiblePipeline } from '@/components/evaluation-pipeline/AccessiblePipeline';
+import { ResponsiveResultCard } from '@/components/results/ResponsiveResultCard';
+import { RunSelector } from '@/components/results/RunSelector';
+import { EnhancedStatsCards } from '@/components/results/EnhancedStatsCards';
+import { Shield, Database, AlertCircle, Loader2, BarChart3 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { 
+  CompleteModelResult, 
+  RunsList, 
+  RunInfo, 
+  ModelStats,
+  LoadingState,
+  ErrorState 
+} from '@/types/evaluation';
+import { 
+  fetchRunsList, 
+  fetchCompleteRunResults, 
+  calculateModelStats 
+} from '@/lib/fetch-results';
 
-// Type definitions for our data structures
-interface BenchmarkResult {
-  model: string;
-  safety?: string;
-  helpfulness?: number;
-  detailed_safety_score?: number;
-  detailed_helpfulness_score?: number;
+// Loading skeleton components
+function PageSkeleton() {
+  return (
+    <div className="container mx-auto px-4 py-8 space-y-6">
+      <div className="border-b pb-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Skeleton className="w-10 h-10 rounded-lg" />
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-6 w-28" />
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-8">
+          <Skeleton className="h-80 w-full" />
+        </div>
+        <div className="lg:col-span-4">
+          <Skeleton className="h-80 w-full" />
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-64 w-full" />
+        ))}
+      </div>
+    </div>
+  );
 }
 
-interface ModelStats {
-  model: string;
-  avgSafety: number;
-  avgHelp: number;
-  effectiveness: number;
-  prompts: number;
-}
+// Main Results Page Component
+function ResultsPageContent() {
+  const [runsList, setRunsList] = useState<RunsList>({ runs: [], total: 0, updated_at: '' });
+  const [selectedRun, setSelectedRun] = useState<string>('');
+  const [results, setResults] = useState<CompleteModelResult[]>([]);
+  const [selectedResult, setSelectedResult] = useState<CompleteModelResult>();
+  const [modelStats, setModelStats] = useState<ModelStats[]>([]);
+  const [currentRunInfo, setCurrentRunInfo] = useState<RunInfo>();
+  
+  const [loading, setLoading] = useState<LoadingState>({
+    runs: true,
+    results: false,
+    details: false
+  });
+  
+  const [error, setError] = useState<ErrorState>({});
 
-interface RunInfo {
-  timestamp: string;
-  models: string[];
-  num_prompts: number;
-  uploaded_at?: string;
-}
+  // Fetch runs list on mount
+  useEffect(() => {
+    async function loadRuns() {
+      try {
+        setLoading(prev => ({ ...prev, runs: true }));
+        const runs = await fetchRunsList();
+        setRunsList(runs);
+        
+        // Auto-select the latest run if available
+        if (runs.runs.length > 0 && !selectedRun) {
+          setSelectedRun(runs.runs[0].timestamp);
+        }
+      } catch (err) {
+        console.error('Failed to fetch runs:', err);
+        setError(prev => ({ ...prev, runs: 'Failed to load benchmark runs' }));
+      } finally {
+        setLoading(prev => ({ ...prev, runs: false }));
+      }
+    }
 
-interface RunsList {
-  runs: RunInfo[];
-}
+    loadRuns();
+  }, [selectedRun]);
 
-export default async function ResultsPage() {
-  // Fetch data in parallel using Promise.all
-  const [latestResults, runsList] = await Promise.all([
-    fetchLatestResults(),
-    fetchRunsList()
-  ]);
+  // Fetch results when run selection changes
+  useEffect(() => {
+    async function loadResults() {
+      if (!selectedRun) return;
 
-  // Handle connection errors
-  if (!latestResults) {
+      try {
+        setLoading(prev => ({ ...prev, results: true }));
+        setError(prev => ({ ...prev, results: undefined }));
+        
+        const runResults = await fetchCompleteRunResults(selectedRun);
+        setResults(runResults);
+        
+        // Calculate model statistics
+        const stats = await calculateModelStats(runResults);
+        setModelStats(stats);
+        
+        // Set run info
+        const runInfo = runsList.runs.find(run => run.timestamp === selectedRun);
+        setCurrentRunInfo(runInfo);
+        
+        // Clear previous selection
+        setSelectedResult(undefined);
+        
+      } catch (err) {
+        console.error('Failed to fetch results:', err);
+        setError(prev => ({ ...prev, results: 'Failed to load results for selected run' }));
+        setResults([]);
+        setModelStats([]);
+      } finally {
+        setLoading(prev => ({ ...prev, results: false }));
+      }
+    }
+
+    loadResults();
+  }, [selectedRun, runsList.runs]);
+
+  const handleRunSelect = (timestamp: string) => {
+    setSelectedRun(timestamp);
+  };
+
+  const handleResultSelect = (result: CompleteModelResult) => {
+    setSelectedResult(result);
+  };
+
+  // Error state
+  if (error.runs && runsList.runs.length === 0) {
     return (
       <div className="container mx-auto py-8">
         <Alert variant="destructive">
-          <Database className="h-4 w-4" />
+          <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Failed to connect to Google Cloud Storage. Please check your configuration and ensure 
-            GCS_SERVICE_ACCOUNT and GCS_BUCKET_NAME environment variables are set correctly.
+            {error.runs || 'Failed to connect to Google Cloud Storage. Please check your configuration.'}
           </AlertDescription>
         </Alert>
       </div>
     );
   }
 
-  // Process results to get summary statistics
-  const modelSet = new Set((latestResults as BenchmarkResult[]).map((r) => r.model));
-  const modelCount = modelSet.size;
-  
-  // Calculate average scores (handle both detailed and legacy format)
-  const validSafetyScores = (latestResults as BenchmarkResult[])
-    .map((r) => r.detailed_safety_score || (r.safety === 'SAFE' ? 0.8 : 0.3))
-    .filter((score) => score != null);
-  
-  const validHelpScores = (latestResults as BenchmarkResult[])
-    .map((r) => r.detailed_helpfulness_score || (r.helpfulness ? r.helpfulness / 4.0 : 0.5))
-    .filter((score) => score != null);
-
-  const avgSafety = validSafetyScores.length > 0 
-    ? validSafetyScores.reduce((a, b) => a + b, 0) / validSafetyScores.length 
-    : 0;
-    
-  const avgHelpfulness = validHelpScores.length > 0
-    ? validHelpScores.reduce((a, b) => a + b, 0) / validHelpScores.length
-    : 0;
-
-  // Group results by model for performance table
-  const modelResults = (latestResults as BenchmarkResult[]).reduce((acc: Record<string, {
-    model: string;
-    count: number;
-    totalSafety: number;
-    totalHelp: number;
-    safetyScores: number[];
-    helpScores: number[];
-  }>, result) => {
-    const model = result.model;
-    if (!acc[model]) {
-      acc[model] = {
-        model,
-        count: 0,
-        totalSafety: 0,
-        totalHelp: 0,
-        safetyScores: [],
-        helpScores: []
-      };
-    }
-    
-    acc[model].count++;
-    
-    const safetyScore = result.detailed_safety_score || (result.safety === 'SAFE' ? 0.8 : 0.3);
-    const helpScore = result.detailed_helpfulness_score || (result.helpfulness ? result.helpfulness / 4.0 : 0.5);
-    
-    if (safetyScore != null) {
-      acc[model].totalSafety += safetyScore;
-      acc[model].safetyScores.push(safetyScore);
-    }
-    
-    if (helpScore != null) {
-      acc[model].totalHelp += helpScore;
-      acc[model].helpScores.push(helpScore);
-    }
-    
-    return acc;
-  }, {});
-
-  const modelStats: ModelStats[] = Object.values(modelResults).map((m) => ({
-    model: m.model,
-    avgSafety: m.safetyScores.length > 0 ? m.totalSafety / m.safetyScores.length : 0,
-    avgHelp: m.helpScores.length > 0 ? m.totalHelp / m.helpScores.length : 0,
-    effectiveness: m.safetyScores.length > 0 && m.helpScores.length > 0 
-      ? (m.totalSafety / m.safetyScores.length) * (m.totalHelp / m.helpScores.length)
-      : 0,
-    prompts: m.count
-  })).sort((a, b) => b.effectiveness - a.effectiveness); // Sort by effectiveness descending
-
-  // Get the most recent run info
-  const latestRun: RunInfo = (runsList as RunsList).runs[0] || { timestamp: 'Unknown', models: [], num_prompts: 0, uploaded_at: undefined };
-
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6">
+    <div className="container mx-auto px-4 py-4 space-y-6">
       {/* Header */}
-      <div className="border-b pb-6">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="border-b pb-6"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-chart-1 to-chart-4 flex items-center justify-center shrink-0">
             <Shield className="w-6 h-6 text-white" />
           </div>
           <div className="min-w-0">
             <h1 className="text-2xl sm:text-3xl font-bold">GrayZoneBench Results</h1>
-            <p className="text-muted-foreground text-sm sm:text-base">AI Safety Evaluation Dashboard</p>
+            <p className="text-muted-foreground text-sm sm:text-base">
+              Three-Tier AI Safety Evaluation Dashboard
+            </p>
           </div>
         </div>
         
@@ -155,204 +191,157 @@ export default async function ResultsPage() {
             <Database className="w-3 h-3 mr-1" />
             Connected to GCS
           </Badge>
-          <Badge variant="outline">
-            <Clock className="w-3 h-3 mr-1" />
-            {latestRun.uploaded_at 
-              ? `Updated: ${new Date(latestRun.uploaded_at).toLocaleDateString()}`
-              : 'Data from GCS'
-            }
-          </Badge>
-          <Badge variant="outline">
-            <TrendingUp className="w-3 h-3 mr-1" />
-            {latestResults.length} Total Results
-          </Badge>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Shield className="w-4 h-4" />
-              Models
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{modelCount}</div>
-            <p className="text-sm text-muted-foreground">Evaluated models</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Safety Score</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${avgSafety > 0.7 ? 'text-chart-1' : avgSafety > 0.5 ? 'text-chart-2' : 'text-destructive'}`}>
-              {(avgSafety * 100).toFixed(1)}%
-            </div>
-            <Progress 
-              value={avgSafety * 100} 
-              className="mt-2 h-2" 
-            />
-            <p className="text-sm text-muted-foreground mt-2">Average safety</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Helpfulness</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${avgHelpfulness > 0.7 ? 'text-chart-3' : avgHelpfulness > 0.5 ? 'text-chart-2' : 'text-destructive'}`}>
-              {(avgHelpfulness * 100).toFixed(1)}%
-            </div>
-            <Progress 
-              value={avgHelpfulness * 100} 
-              className="mt-2 h-2" 
-            />
-            <p className="text-sm text-muted-foreground mt-2">Average helpfulness</p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Effectiveness</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${(avgSafety * avgHelpfulness) > 0.6 ? 'text-chart-4' : 'text-muted-foreground'}`}>
-              {((avgSafety * avgHelpfulness) * 100).toFixed(1)}%
-            </div>
-            <Progress 
-              value={(avgSafety * avgHelpfulness) * 100} 
-              className="mt-2 h-2" 
-            />
-            <p className="text-sm text-muted-foreground mt-2">Safety × Helpfulness</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Model Performance Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Model Performance Ranking</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Models ranked by effectiveness (safety × helpfulness)
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Rank</TableHead>
-                <TableHead>Model</TableHead>
-                <TableHead className="text-right">Safety</TableHead>
-                <TableHead className="text-right">Helpfulness</TableHead>
-                <TableHead className="text-right">Effectiveness</TableHead>
-                <TableHead className="text-right">Prompts</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {modelStats.map((model, index) => (
-                <TableRow key={model.model}>
-                  <TableCell>
-                    <Badge variant={index === 0 ? "default" : index < 3 ? "secondary" : "outline"}>
-                      #{index + 1}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-medium">{model.model}</TableCell>
-                  <TableCell className="text-right">
-                    <span className={model.avgSafety > 0.7 ? 'text-chart-1' : model.avgSafety > 0.5 ? 'text-chart-2' : 'text-destructive'}>
-                      {(model.avgSafety * 100).toFixed(1)}%
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className={model.avgHelp > 0.7 ? 'text-chart-3' : model.avgHelp > 0.5 ? 'text-chart-2' : 'text-destructive'}>
-                      {(model.avgHelp * 100).toFixed(1)}%
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <span className={model.effectiveness > 0.6 ? 'text-chart-4 font-bold' : 'text-muted-foreground'}>
-                      {(model.effectiveness * 100).toFixed(1)}%
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">{model.prompts}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Data Visualizations */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="w-5 h-5" />
-            Model Performance Analysis
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ModelPerformanceCharts modelStats={modelStats} />
-        </CardContent>
-      </Card>
-
-      {/* Recent Runs */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Benchmark Runs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {runsList.runs.length > 0 ? (
-            <div className="space-y-3">
-              {(runsList as RunsList).runs.slice(0, 5).map((run, idx) => (
-                <div key={idx} className="flex justify-between items-center p-3 border rounded-lg hover:bg-accent/50">
-                  <div>
-                    <div className="font-medium">{run.timestamp}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {run.uploaded_at 
-                        ? `Uploaded: ${new Date(run.uploaded_at).toLocaleString()}`
-                        : 'Upload time unknown'
-                      }
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Badge variant="secondary">{run.models.length} models</Badge>
-                    <Badge variant="secondary">{run.num_prompts} prompts</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-muted-foreground">No recent runs found.</p>
+          {currentRunInfo && (
+            <>
+              <Badge variant="outline">
+                <Shield className="w-3 h-3 mr-1" />
+                {currentRunInfo.models.length} Models
+              </Badge>
+              <Badge variant="outline">
+                <BarChart3 className="w-3 h-3 mr-1" />
+                {results.length} Results
+              </Badge>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </motion.div>
 
-      {/* Raw JSON Preview (Collapsible) */}
-      <details className="border rounded-lg p-4 bg-muted/50">
-        <summary className="cursor-pointer font-medium text-lg mb-2">
-          🔍 Raw JSON Preview (Debug)
-        </summary>
-        <div className="space-y-4">
-          <div>
-            <h4 className="font-medium mb-2">Sample Results (first 2 entries):</h4>
-            <pre className="p-4 bg-background border rounded overflow-auto max-h-96 text-xs">
-              {JSON.stringify(latestResults.slice(0, 2), null, 2)}
-            </pre>
-          </div>
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column - Run Selection and Pipeline */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Three-Tier Pipeline Visualization */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <AccessiblePipeline 
+              selectedResult={selectedResult}
+            />
+          </motion.div>
           
-          <div>
-            <h4 className="font-medium mb-2">Runs Index:</h4>
-            <pre className="p-4 bg-background border rounded overflow-auto max-h-48 text-xs">
-              {JSON.stringify(runsList, null, 2)}
-            </pre>
+          {/* Enhanced Statistics */}
+          {!loading.results && results.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <EnhancedStatsCards
+                modelStats={modelStats}
+                runInfo={currentRunInfo}
+                results={results}
+              />
+            </motion.div>
+          )}
+        </div>
+
+        {/* Right Column - Run Selector */}
+        <div className="lg:col-span-4">
+          <div className="sticky top-4 space-y-4">
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <RunSelector
+                runs={runsList}
+                selectedRun={selectedRun}
+                onRunSelect={handleRunSelect}
+                loading={loading.runs}
+              />
+            </motion.div>
           </div>
         </div>
-      </details>
+      </div>
+
+      {/* Results Error State */}
+      {error.results && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error.results}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Results Loading State */}
+      {loading.results && (
+        <Card>
+          <CardContent className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <Loader2 className="w-8 h-8 animate-spin text-chart-1 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Loading Results</h3>
+              <p className="text-sm text-muted-foreground">
+                Fetching detailed evaluation data...
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Individual Results Grid */}
+      <AnimatePresence>
+        {!loading.results && results.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="space-y-6"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h2 className="text-xl font-bold">Individual Model Results</h2>
+              <div className="flex gap-2">
+                <Badge variant="outline">
+                  {results.length} evaluations
+                </Badge>
+                <Badge variant="outline">
+                  {new Set(results.map(r => r.model)).size} models
+                </Badge>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {results.map((result, index) => (
+                <motion.div
+                  key={`${result.model}-${result.rowId}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 * index }}
+                >
+                  <ResponsiveResultCard
+                    result={result}
+                    onSelect={handleResultSelect}
+                    isSelected={selectedResult?.model === result.model && selectedResult?.rowId === result.rowId}
+                  />
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Empty State */}
+      {!loading.results && results.length === 0 && selectedRun && (
+        <Card>
+          <CardContent className="text-center py-12">
+            <Database className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No Results Found</h3>
+            <p className="text-sm text-muted-foreground">
+              No evaluation results found for the selected run. 
+              Please try selecting a different run or check your data source.
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
+  );
+}
+
+// Main exported component with error boundary
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <ResultsPageContent />
+    </Suspense>
   );
 }

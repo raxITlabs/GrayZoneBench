@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Shield, Settings, Brain, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
-import type { CompleteModelResult, EvaluationNode, EvaluationEdge } from '@/types/evaluation';
+import type { CompleteModelResult } from '@/types/evaluation';
 import 'reactflow/dist/style.css';
 
 interface AccessiblePipelineProps {
@@ -32,7 +32,23 @@ interface AccessiblePipelineProps {
 }
 
 // Custom node components with accessibility features
-const DeterministicNode = ({ data, selected }: any) => (
+interface NodeProps {
+  data: {
+    id: string;
+    label: string;
+    score?: number;
+    confidence?: number;
+    used: boolean;
+    tier: string;
+    details?: Record<string, unknown>;
+    safety?: number;
+    helpfulness?: number;
+    effectiveness?: number;
+  };
+  selected?: boolean;
+}
+
+const DeterministicNode = ({ data, selected }: NodeProps) => (
   <div
     role="button"
     tabIndex={0}
@@ -80,7 +96,7 @@ const DeterministicNode = ({ data, selected }: any) => (
   </div>
 );
 
-const ModerationNode = ({ data, selected }: any) => (
+const ModerationNode = ({ data, selected }: NodeProps) => (
   <div
     role="button"
     tabIndex={0}
@@ -108,10 +124,10 @@ const ModerationNode = ({ data, selected }: any) => (
           <div className="mt-2">
             <div className="flex justify-between items-center text-xs">
               <span>Confidence:</span>
-              <span className="font-mono">{(data.confidence * 100).toFixed(1)}%</span>
+              <span className="font-mono">{((data.confidence || 0) * 100).toFixed(1)}%</span>
             </div>
             <Progress 
-              value={data.confidence * 100} 
+              value={(data.confidence || 0) * 100} 
               className="mt-1 h-1.5 bg-primary-foreground/20"
             />
           </div>
@@ -128,7 +144,7 @@ const ModerationNode = ({ data, selected }: any) => (
   </div>
 );
 
-const AgentNode = ({ data, selected }: any) => (
+const AgentNode = ({ data, selected }: NodeProps) => (
   <div
     role="button"
     tabIndex={0}
@@ -156,10 +172,10 @@ const AgentNode = ({ data, selected }: any) => (
           <div className="mt-2">
             <div className="flex justify-between items-center text-xs">
               <span>Effectiveness:</span>
-              <span className="font-mono">{(data.score * 100).toFixed(1)}%</span>
+              <span className="font-mono">{((data.score || 0) * 100).toFixed(1)}%</span>
             </div>
             <Progress 
-              value={data.score * 100} 
+              value={(data.score || 0) * 100} 
               className="mt-1 h-1.5 bg-secondary-foreground/20"
             />
           </div>
@@ -176,10 +192,11 @@ const AgentNode = ({ data, selected }: any) => (
   </div>
 );
 
-const ResultNode = ({ data, selected }: any) => {
+const ResultNode = ({ data, selected }: NodeProps) => {
   const getSafetyIcon = () => {
-    if (data.safety > 0.7) return <CheckCircle className="w-5 h-5 text-green-500" />;
-    if (data.safety > 0.4) return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+    const safety = data.safety || 0;
+    if (safety > 0.7) return <CheckCircle className="w-5 h-5 text-green-500" />;
+    if (safety > 0.4) return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
     return <XCircle className="w-5 h-5 text-red-500" />;
   };
 
@@ -205,24 +222,24 @@ const ResultNode = ({ data, selected }: any) => {
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div>
               <p className="text-xs text-muted-foreground">Safety</p>
-              <p className="text-sm font-mono">{(data.safety * 100).toFixed(1)}%</p>
+              <p className="text-sm font-mono">{((data.safety || 0) * 100).toFixed(1)}%</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Helpfulness</p>
-              <p className="text-sm font-mono">{(data.helpfulness * 100).toFixed(1)}%</p>
+              <p className="text-sm font-mono">{((data.helpfulness || 0) * 100).toFixed(1)}%</p>
             </div>
           </div>
           <div className="mt-2">
             <p className="text-xs text-muted-foreground">Effectiveness</p>
-            <p className="text-sm font-mono">{((data.safety * data.helpfulness) * 100).toFixed(1)}%</p>
+            <p className="text-sm font-mono">{(((data.safety || 0) * (data.helpfulness || 0)) * 100).toFixed(1)}%</p>
           </div>
         </div>
       </div>
       <div id={`result-desc-${data.id}`} className="sr-only">
         Final evaluation result combining safety and helpfulness scores.
-        Safety: {(data.safety * 100).toFixed(1)}%, 
-        Helpfulness: {(data.helpfulness * 100).toFixed(1)}%, 
-        Overall effectiveness: {((data.safety * data.helpfulness) * 100).toFixed(1)}%
+        Safety: {((data.safety || 0) * 100).toFixed(1)}%, 
+        Helpfulness: {((data.helpfulness || 0) * 100).toFixed(1)}%, 
+        Overall effectiveness: {(((data.safety || 0) * (data.helpfulness || 0)) * 100).toFixed(1)}%
       </div>
     </div>
   );
@@ -367,8 +384,8 @@ export function AccessiblePipeline({ selectedResult, className = '' }: Accessibl
     return { nodes, edges };
   }, [selectedResult]);
 
-  const [nodesState, setNodes, onNodesChange] = useNodesState(nodes);
-  const [edgesState, setEdges, onEdgesChange] = useEdgesState(edges);
+  const [nodesState, , onNodesChange] = useNodesState(nodes);
+  const [edgesState, , onEdgesChange] = useEdgesState(edges);
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
     console.log('Node clicked:', node);
@@ -435,13 +452,7 @@ export function AccessiblePipeline({ selectedResult, className = '' }: Accessibl
               showZoom={true}
               showFitView={true}
               showInteractive={false}
-              style={{ 
-                button: { 
-                  minWidth: '44px', 
-                  minHeight: '44px',
-                  borderRadius: '6px'
-                }
-              }}
+              className="[&>button]:min-w-[44px] [&>button]:min-h-[44px] [&>button]:rounded-md"
             />
             {showMiniMap && (
               <MiniMap
