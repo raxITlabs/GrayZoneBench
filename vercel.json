@@ -1,21 +1,8 @@
 {
   "version": 2,
-  "name": "grayzonebench-dashboard",
-  "buildCommand": "cd site && pnpm run build",
-  "devCommand": "cd site && pnpm run dev", 
-  "installCommand": "cd site && pnpm install",
-  "outputDirectory": "site/.next",
   "functions": {
-    "site/app/results/page.tsx": {
+    "app/results/page.tsx": {
       "maxDuration": 30
-    }
-  },
-  "env": {
-    "NEXT_TELEMETRY_DISABLED": "1"
-  },
-  "build": {
-    "env": {
-      "NEXT_TELEMETRY_DISABLED": "1"
     }
   },
   "headers": [
