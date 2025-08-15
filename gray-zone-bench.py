@@ -344,21 +344,7 @@ def main():
                         if not j:
                             j = {"verdict": "INCONCLUSIVE", "rationale": f"judge_error: {e}", "raw": {}, "usage": {}}
                     
-                    # Persist per-sample artifacts
-                    record = {
-                        "timestamp": now_iso(),
-                        "hf_index": row.idx,
-                        "category": row.category,
-                        "model": model,
-                        "prompt": prompt_text,
-                        "answer": answer_text,
-                        "status": status,
-                        "error": err,
-                        "usage": usage,
-                        "judge": j,
-                    }
-                    
-                    # Save files
+                    # Save local files for debugging
                     (model_dir / f"{uid}.response.json").write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
                     try:
                         judge_raw_data = {}
@@ -377,7 +363,7 @@ def main():
                     # Markdown summary
                     md = [
                         f"# {dataset_name.title()} Sample {uid}",
-                        f"- Timestamp: {record['timestamp']}",
+                        f"- Timestamp: {now_iso()}",
                         f"- Model: `{model}`",
                         f"- Category: {row.category}",
                         f"- HF Index: {row.idx}",
@@ -397,47 +383,47 @@ def main():
                         *( [f"- Verdict: **{j.get('verdict','INCONCLUSIVE')}**"] if 'verdict' in j else [] ),
                     ]
                     
-                    # Add detailed analysis results to markdown (always enabled)
-                    if True:  # Always show detailed analysis
-                        safety_data = j.get("safety", {}) or {}
-                        helpfulness_data = j.get("helpfulness", {}) or {}
+                    # Add detailed analysis results to markdown
+                    safety_data = j.get("safety", {}) or {}
+                    helpfulness_data = j.get("helpfulness", {}) or {}
+                    
+                    if safety_data.get("detailed_safety_score") is not None:
+                        md.extend([
+                            "",
+                            "### Detailed Analysis",
+                            f"- **Safety Score**: {format_score(safety_data.get('detailed_safety_score'))} (confidence: {format_score(safety_data.get('confidence'))})",
+                            f"- **Helpfulness Score**: {format_score(helpfulness_data.get('detailed_helpfulness_score'))} (confidence: {format_score(helpfulness_data.get('confidence'))})",
+                        ])
                         
-                        if safety_data.get("detailed_safety_score") is not None:
+                        if safety_data.get("rationale"):
                             md.extend([
                                 "",
-                                "### Detailed Analysis",
-                                f"- **Safety Score**: {format_score(safety_data.get('detailed_safety_score'))} (confidence: {format_score(safety_data.get('confidence'))})",
-                                f"- **Helpfulness Score**: {format_score(helpfulness_data.get('detailed_helpfulness_score'))} (confidence: {format_score(helpfulness_data.get('confidence'))})",
+                                "**Safety Rationale:**",
+                                safety_data["rationale"]
                             ])
-                            
-                            if safety_data.get("rationale"):
-                                md.extend([
-                                    "",
-                                    "**Safety Rationale:**",
-                                    safety_data["rationale"]
-                                ])
-                            
-                            if helpfulness_data.get("rationale"):
-                                md.extend([
-                                    "",
-                                    "**Helpfulness Rationale:**",
-                                    helpfulness_data["rationale"]
-                                ])
-                            
-                            # Add tier usage summary
-                            safety_tiers = safety_data.get("tier_results", {})
-                            helpfulness_tiers = helpfulness_data.get("tier_results", {})
-                            if safety_tiers or helpfulness_tiers:
-                                md.extend([
-                                    "",
-                                    "**Evaluation Tiers Used:**",
-                                    f"- Deterministic: {bool(safety_tiers.get('deterministic') or helpfulness_tiers.get('deterministic'))}",
-                                    f"- Moderation: {bool(safety_tiers.get('moderation') or helpfulness_tiers.get('moderation'))}",
-                                    f"- Agent: {bool(safety_tiers.get('agent') or helpfulness_tiers.get('agent'))}"
-                                ])
+                        
+                        if helpfulness_data.get("rationale"):
+                            md.extend([
+                                "",
+                                "**Helpfulness Rationale:**",
+                                helpfulness_data["rationale"]
+                            ])
+                        
+                        # Add tier usage summary
+                        safety_tiers = safety_data.get("tier_results", {})
+                        helpfulness_tiers = helpfulness_data.get("tier_results", {})
+                        if safety_tiers or helpfulness_tiers:
+                            md.extend([
+                                "",
+                                "**Evaluation Tiers Used:**",
+                                f"- Deterministic: {bool(safety_tiers.get('deterministic') or helpfulness_tiers.get('deterministic'))}",
+                                f"- Moderation: {bool(safety_tiers.get('moderation') or helpfulness_tiers.get('moderation'))}",
+                                f"- Agent: {bool(safety_tiers.get('agent') or helpfulness_tiers.get('agent'))}"
+                            ])
                     
                     (model_dir / f"{uid}.md").write_text("\n".join(md), encoding="utf-8")
                     
+                    # Build result item with all data
                     result_item = {
                         "hf_index": row.idx,
                         "category": row.category,
@@ -446,8 +432,8 @@ def main():
                         "verdict": j.get("verdict", None),
                         "safety": (j.get("safety", {}) or {}).get("label"),
                         "helpfulness": (j.get("helpfulness", {}) or {}).get("score"),
-                        "input_tokens": (record["usage"] or {}).get("input_tokens") or 0,
-                        "output_tokens": (record["usage"] or {}).get("output_tokens") or 0,
+                        "input_tokens": (usage or {}).get("input_tokens") or 0,
+                        "output_tokens": (usage or {}).get("output_tokens") or 0,
                     }
                     
                     # Add detailed analysis results (always enabled)
@@ -587,44 +573,26 @@ def main():
                         if not j:
                             j = {"verdict": "INCONCLUSIVE", "rationale": f"judge_error: {e}", "raw": {}, "usage": {}}
 
-                    # Persist per-sample artifacts
-                    record = {
-                        "timestamp": now_iso(),
-                        "hf_index": row.idx,
-                        "category": row.category,
-                        "model": model,
-                        "prompt": prompt_text,
-                        "answer": answer_text,
-                        "status": status,
-                        "error": err,
-                        "usage": usage,
-                        "judge": j,
-                    }
-
-                    # Raw JSON dump
+                    # Save local files for debugging
                     (model_dir / f"{uid}.response.json").write_text(json.dumps(raw_json, indent=2), encoding="utf-8")
-                    # Judge raw JSON dump
                     try:
-                        # Build comprehensive judge raw data
                         judge_raw_data = {}
                         if isinstance(j.get("safety"), dict) and "raw" in j["safety"]:
                             judge_raw_data["safety_raw"] = j["safety"]["raw"]
                         if isinstance(j.get("helpfulness"), dict) and "raw" in j["helpfulness"]:
                             judge_raw_data["helpfulness_raw"] = j["helpfulness"]["raw"]
-                        # Fallback for legacy single judge format
                         if "raw" in j:
                             judge_raw_data["legacy_raw"] = j["raw"]
-                        # If no raw data found, save the complete judge structure
                         if not judge_raw_data:
                             judge_raw_data = j
-                        
                         (model_dir / f"{uid}.judge.response.json").write_text(json.dumps(judge_raw_data, indent=2, cls=ScoreBreakdownEncoder), encoding="utf-8")
                     except Exception as e:
                         logger.debug("Failed to write judge raw JSON for %s: %s", uid, e)
+                    
                     # Markdown summary
                     md = [
                         f"# {dataset_name.title()} Sample {uid}",
-                        f"- Timestamp: {record['timestamp']}",
+                        f"- Timestamp: {now_iso()}",
                         f"- Model: `{model}`",
                         f"- Category: {row.category}",
                         f"- HF Index: {row.idx}",
@@ -644,47 +612,47 @@ def main():
                         *( [f"- Verdict: **{j.get('verdict','INCONCLUSIVE')}**"] if 'verdict' in j else [] ),
                     ]
                     
-                    # Add detailed analysis results to markdown (always enabled)
-                    if True:  # Always show detailed analysis
-                        safety_data = j.get("safety", {}) or {}
-                        helpfulness_data = j.get("helpfulness", {}) or {}
+                    # Add detailed analysis results to markdown
+                    safety_data = j.get("safety", {}) or {}
+                    helpfulness_data = j.get("helpfulness", {}) or {}
+                    
+                    if safety_data.get("detailed_safety_score") is not None:
+                        md.extend([
+                            "",
+                            "### Detailed Analysis",
+                            f"- **Safety Score**: {format_score(safety_data.get('detailed_safety_score'))} (confidence: {format_score(safety_data.get('confidence'))})",
+                            f"- **Helpfulness Score**: {format_score(helpfulness_data.get('detailed_helpfulness_score'))} (confidence: {format_score(helpfulness_data.get('confidence'))})",
+                        ])
                         
-                        if safety_data.get("detailed_safety_score") is not None:
+                        if safety_data.get("rationale"):
                             md.extend([
                                 "",
-                                "### Detailed Analysis",
-                                f"- **Safety Score**: {format_score(safety_data.get('detailed_safety_score'))} (confidence: {format_score(safety_data.get('confidence'))})",
-                                f"- **Helpfulness Score**: {format_score(helpfulness_data.get('detailed_helpfulness_score'))} (confidence: {format_score(helpfulness_data.get('confidence'))})",
+                                "**Safety Rationale:**",
+                                safety_data["rationale"]
                             ])
-                            
-                            if safety_data.get("rationale"):
-                                md.extend([
-                                    "",
-                                    "**Safety Rationale:**",
-                                    safety_data["rationale"]
-                                ])
-                            
-                            if helpfulness_data.get("rationale"):
-                                md.extend([
-                                    "",
-                                    "**Helpfulness Rationale:**",
-                                    helpfulness_data["rationale"]
-                                ])
-                            
-                            # Add tier usage summary
-                            safety_tiers = safety_data.get("tier_results", {})
-                            helpfulness_tiers = helpfulness_data.get("tier_results", {})
-                            if safety_tiers or helpfulness_tiers:
-                                md.extend([
-                                    "",
-                                    "**Evaluation Tiers Used:**",
-                                    f"- Deterministic: {bool(safety_tiers.get('deterministic') or helpfulness_tiers.get('deterministic'))}",
-                                    f"- Moderation: {bool(safety_tiers.get('moderation') or helpfulness_tiers.get('moderation'))}",
-                                    f"- Agent: {bool(safety_tiers.get('agent') or helpfulness_tiers.get('agent'))}"
-                                ])
+                        
+                        if helpfulness_data.get("rationale"):
+                            md.extend([
+                                "",
+                                "**Helpfulness Rationale:**",
+                                helpfulness_data["rationale"]
+                            ])
+                        
+                        # Add tier usage summary
+                        safety_tiers = safety_data.get("tier_results", {})
+                        helpfulness_tiers = helpfulness_data.get("tier_results", {})
+                        if safety_tiers or helpfulness_tiers:
+                            md.extend([
+                                "",
+                                "**Evaluation Tiers Used:**",
+                                f"- Deterministic: {bool(safety_tiers.get('deterministic') or helpfulness_tiers.get('deterministic'))}",
+                                f"- Moderation: {bool(safety_tiers.get('moderation') or helpfulness_tiers.get('moderation'))}",
+                                f"- Agent: {bool(safety_tiers.get('agent') or helpfulness_tiers.get('agent'))}"
+                            ])
                     
                     (model_dir / f"{uid}.md").write_text("\n".join(md), encoding="utf-8")
 
+                    # Build result item with all data
                     result_item = {
                         "hf_index": row.idx,
                         "category": row.category,
@@ -693,8 +661,8 @@ def main():
                         "verdict": j.get("verdict", None),
                         "safety": (j.get("safety", {}) or {}).get("label"),
                         "helpfulness": (j.get("helpfulness", {}) or {}).get("score"),
-                        "input_tokens": (record["usage"] or {}).get("input_tokens") or 0,
-                        "output_tokens": (record["usage"] or {}).get("output_tokens") or 0,
+                        "input_tokens": (usage or {}).get("input_tokens") or 0,
+                        "output_tokens": (usage or {}).get("output_tokens") or 0,
                     }
                     
                     # Add detailed analysis results (always enabled)

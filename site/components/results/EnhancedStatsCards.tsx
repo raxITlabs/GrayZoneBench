@@ -86,34 +86,45 @@ export function EnhancedStatsCards({
   results, 
   className = '' 
 }: EnhancedStatsCardsProps) {
+  // Ensure modelStats is an array
+  const safeModelStats = Array.isArray(modelStats) ? modelStats : [];
+  
   // Calculate aggregate statistics
   const totalPrompts = results.length;
-  const totalModels = modelStats.length;
-  const avgSafety = modelStats.reduce((sum, stat) => sum + stat.avgSafety, 0) / (totalModels || 1);
-  const avgHelpfulness = modelStats.reduce((sum, stat) => sum + stat.avgHelpfulness, 0) / (totalModels || 1);
+  const totalModels = safeModelStats.length;
+  const avgSafety = totalModels > 0 ? safeModelStats.reduce((sum, stat) => sum + stat.avgSafety, 0) / totalModels : 0;
+  const avgHelpfulness = totalModels > 0 ? safeModelStats.reduce((sum, stat) => sum + stat.avgHelpfulness, 0) / totalModels : 0;
   const avgEffectiveness = avgSafety * avgHelpfulness;
-  const avgCost = modelStats.reduce((sum, stat) => sum + stat.avgCost, 0) / (totalModels || 1);
+  const avgTokens = totalModels > 0 ? safeModelStats.reduce((sum, stat) => sum + stat.avgTokens, 0) / totalModels : 0;
   
-  // Response modes distribution across all results
-  const responseModeData = Object.entries(
-    results.reduce((acc, result) => {
-      const mode = result.judge.safety_raw.deterministic_features.response_mode;
-      acc[mode] = (acc[mode] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  ).map(([name, value]) => ({ name: name.replace('-', ' '), value, fullName: name }));
+  // Response modes distribution across all results (if data is available)
+  const responseModeData = results.length > 0 && results[0].judge?.safety_raw?.deterministic_features 
+    ? Object.entries(
+        results.reduce((acc, result) => {
+          const mode = result.judge?.safety_raw?.deterministic_features?.response_mode;
+          if (mode) {
+            acc[mode] = (acc[mode] || 0) + 1;
+          }
+          return acc;
+        }, {} as Record<string, number>)
+      ).map(([name, value]) => ({ name: name.replace('-', ' '), value, fullName: name }))
+    : [];
 
-  // Gray zone types distribution
-  const grayZoneData = Object.entries(
-    results.reduce((acc, result) => {
-      const type = result.judge.safety_raw.gray_zone_navigation.gray_zone_type;
-      acc[type] = (acc[type] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>)
-  ).map(([name, value]) => ({ name: name.replace('-', ' '), value, fullName: name }));
+  // Gray zone types distribution (if data is available)
+  const grayZoneData = results.length > 0 && results[0].judge?.safety_raw?.gray_zone_navigation
+    ? Object.entries(
+        results.reduce((acc, result) => {
+          const type = result.judge?.safety_raw?.gray_zone_navigation?.gray_zone_type;
+          if (type) {
+            acc[type] = (acc[type] || 0) + 1;
+          }
+          return acc;
+        }, {} as Record<string, number>)
+      ).map(([name, value]) => ({ name: name.replace('-', ' '), value, fullName: name }))
+    : [];
 
   // Model performance data for bar chart
-  const modelPerformanceData = modelStats.slice(0, 8).map(stat => ({
+  const modelPerformanceData = safeModelStats.slice(0, 8).map(stat => ({
     name: stat.model.replace(/^(gpt-|claude-|gemini-)/i, ''),
     safety: Math.round(stat.avgSafety * 100),
     helpfulness: Math.round(stat.avgHelpfulness * 100),
@@ -287,19 +298,21 @@ export function EnhancedStatsCards({
       </Card>
 
       {/* Distribution Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Response Modes Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="w-5 h-5" />
-              Response Modes
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Distribution of response types across all evaluations
-            </p>
-          </CardHeader>
-          <CardContent>
+      {(responseModeData.length > 0 || grayZoneData.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Response Modes Distribution */}
+          {responseModeData.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="w-5 h-5" />
+                  Response Modes
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Distribution of response types across all evaluations
+                </p>
+              </CardHeader>
+              <CardContent>
             <div className="h-64" role="img" aria-label="Response modes distribution">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart accessibilityLayer>
@@ -369,19 +382,21 @@ export function EnhancedStatsCards({
             </div>
           </CardContent>
         </Card>
+          )}
 
-        {/* Gray Zone Types Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5" />
-              Gray Zone Types
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Classification of evaluation scenarios
-            </p>
-          </CardHeader>
-          <CardContent>
+          {/* Gray Zone Types Distribution */}
+          {grayZoneData.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5" />
+                  Gray Zone Types
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Classification of evaluation scenarios
+                </p>
+              </CardHeader>
+              <CardContent>
             <div className="h-64" role="img" aria-label="Gray zone types distribution">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart accessibilityLayer>
@@ -451,7 +466,9 @@ export function EnhancedStatsCards({
             </div>
           </CardContent>
         </Card>
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Additional Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -459,14 +476,14 @@ export function EnhancedStatsCards({
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
               <Clock className="w-4 h-4" />
-              Avg Evaluation Cost
+              Avg Token Usage
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold text-muted-foreground">
-              ${avgCost.toFixed(4)}
+              {Math.round(avgTokens).toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground">Per evaluation</p>
+            <p className="text-xs text-muted-foreground">Tokens per evaluation</p>
           </CardContent>
         </Card>
 
@@ -479,7 +496,7 @@ export function EnhancedStatsCards({
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold text-chart-1">
-              {modelStats.filter(stat => stat.effectiveness > 0.6).length}
+              {safeModelStats.filter(stat => stat.effectiveness > 0.6).length}
             </div>
             <p className="text-xs text-muted-foreground">Above 60% effectiveness</p>
           </CardContent>
@@ -494,7 +511,7 @@ export function EnhancedStatsCards({
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold text-chart-2">
-              {(modelStats.reduce((sum, stat) => sum + stat.avgConfidence, 0) / (totalModels || 1) * 100).toFixed(1)}%
+              {totalModels > 0 ? (safeModelStats.reduce((sum, stat) => sum + stat.avgConfidence, 0) / totalModels * 100).toFixed(1) : '0.0'}%
             </div>
             <p className="text-xs text-muted-foreground">Evaluation confidence</p>
           </CardContent>

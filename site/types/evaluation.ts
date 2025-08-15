@@ -201,7 +201,82 @@ export interface ModelResponse {
   };
 }
 
-// Complete model result with all files
+// New smart merge result structure from GCS
+export interface SmartMergeResult {
+  hf_index: number;
+  category: string;
+  model: string;
+  status: 'ok' | 'error' | 'api_blocked';
+  verdict: string | null;
+  safety: string;
+  helpfulness: number;
+  input_tokens: number;
+  output_tokens: number;
+  detailed_safety_score: number;
+  detailed_helpfulness_score: number;
+  safety_confidence: number;
+  helpfulness_confidence: number;
+  safety_rationale: string;
+  helpfulness_rationale: string;
+  safety_tier_results: any;
+  helpfulness_tier_results: any;
+  timestamp: string;
+}
+
+// Metadata structure from GCS latest/metadata.json
+export interface BenchmarkMetadata {
+  last_updated: string;
+  models_tested: string[];
+  total_prompts: number;
+  last_run_models: string[];
+  models_info: {
+    [model: string]: {
+      total_prompts: number;
+      avg_safety: number;
+      avg_helpfulness: number;
+      safe_count: number;
+      unsafe_count: number;
+      total_tokens: number;
+      last_updated: string;
+      file_size_kb: number;
+    };
+  };
+}
+
+// Model-specific data structure from GCS latest/models/{model}.json
+export interface ModelData {
+  model: string;
+  last_updated: string;
+  stats: {
+    total_prompts: number;
+    avg_safety: number;
+    avg_helpfulness: number;
+    safe_count: number;
+    unsafe_count: number;
+    total_tokens: number;
+    last_updated: string;
+  };
+  results: {
+    [promptId: string]: SmartMergeResult;
+  };
+}
+
+// Latest results structure from GCS latest/results.json (legacy - keeping for backward compatibility)
+export interface LatestResults {
+  metadata: {
+    last_updated: string;
+    models_tested: string[];
+    total_prompts: number;
+    last_run_models: string[];
+  };
+  results: {
+    [promptId: string]: {
+      [model: string]: SmartMergeResult;
+    };
+  };
+}
+
+// Complete model result with all files (legacy structure for detailed views)
 export interface CompleteModelResult {
   model: string;
   rowId: string;
@@ -233,31 +308,25 @@ export interface RunsList {
   updated_at: string;
 }
 
-// Enhanced model statistics
+// Enhanced model statistics (updated for smart merge)
 export interface ModelStats {
   model: string;
   totalPrompts: number;
   avgSafety: number;
   avgHelpfulness: number;
   effectiveness: number;
-  responseModesDistribution: {
-    'constructive-refusal': number;
-    'direct-answer': number;
-    'safe-completion': number;
-  };
-  grayZoneTypes: {
-    'clear-harmful': number;
-    'clear-safe': number;
-    'ambiguous-dual-use': number;
-    'contextual': number;
-  };
-  tierUsage: {
-    deterministic: number;
-    moderation: number;
-    agent: number;
-  };
+  safeCount: number;
+  unsafeCount: number;
   avgConfidence: number;
-  avgCost: number;
+  avgTokens: number;
+  lastUpdated: string;
+  categories: {
+    [category: string]: {
+      count: number;
+      avgSafety: number;
+      avgHelpfulness: number;
+    };
+  };
 }
 
 // Visualization data structures
@@ -300,15 +369,15 @@ export interface EvaluationFlow {
   edges: EvaluationEdge[];
 }
 
-// Filter and search interfaces
+// Filter and search interfaces (updated for smart merge)
 export interface ResultFilter {
   models?: string[];
   categories?: string[];
-  responseModes?: string[];
-  grayZoneTypes?: string[];
+  safetyLabels?: string[];
   safetyRange?: [number, number];
   helpfulnessRange?: [number, number];
   effectivenessRange?: [number, number];
+  promptIds?: string[];
 }
 
 export interface SearchQuery {
