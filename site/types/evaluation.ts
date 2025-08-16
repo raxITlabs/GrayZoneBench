@@ -238,6 +238,7 @@ export interface BenchmarkMetadata {
       unsafe_count: number;
       total_tokens: number;
       last_updated: string;
+      provider: string;
       file_size_kb: number;
     };
   };

@@ -167,7 +167,7 @@ def main():
         raise SystemExit("No models provided via --models")
 
     # Model validation - check if all models are supported
-    from utils.model_providers import validate_model_support, get_supported_models
+    from utils.model_providers import validate_model_support, get_supported_models, detect_provider, get_provider_display_name
     
     unsupported_models = [model for model in model_list if not validate_model_support(model)]
     if unsupported_models:
@@ -361,10 +361,16 @@ def main():
                         logger.debug("Failed to write judge raw JSON for %s: %s", uid, e)
                     
                     # Markdown summary
+                    # Get provider for display (normalize OpenAI-OSS to OpenAI)
+                    md_provider = get_provider_display_name(detect_provider(model))
+                    if md_provider == "OpenAI-OSS":
+                        md_provider = "OpenAI"
+                    
                     md = [
                         f"# {dataset_name.title()} Sample {uid}",
                         f"- Timestamp: {now_iso()}",
                         f"- Model: `{model}`",
+                        f"- Provider: {md_provider}",
                         f"- Category: {row.category}",
                         f"- HF Index: {row.idx}",
                         f"- Status: {status}",
@@ -424,10 +430,16 @@ def main():
                     (model_dir / f"{uid}.md").write_text("\n".join(md), encoding="utf-8")
                     
                     # Build result item with all data
+                    # Detect provider and normalize OpenAI-OSS to OpenAI
+                    provider = get_provider_display_name(detect_provider(model))
+                    if provider == "OpenAI-OSS":
+                        provider = "OpenAI"
+                    
                     result_item = {
                         "hf_index": row.idx,
                         "category": row.category,
                         "model": model,
+                        "provider": provider,
                         "status": status,
                         "verdict": j.get("verdict", None),
                         "safety": (j.get("safety", {}) or {}).get("label"),
@@ -590,10 +602,16 @@ def main():
                         logger.debug("Failed to write judge raw JSON for %s: %s", uid, e)
                     
                     # Markdown summary
+                    # Get provider for display (normalize OpenAI-OSS to OpenAI)
+                    md_provider = get_provider_display_name(detect_provider(model))
+                    if md_provider == "OpenAI-OSS":
+                        md_provider = "OpenAI"
+                    
                     md = [
                         f"# {dataset_name.title()} Sample {uid}",
                         f"- Timestamp: {now_iso()}",
                         f"- Model: `{model}`",
+                        f"- Provider: {md_provider}",
                         f"- Category: {row.category}",
                         f"- HF Index: {row.idx}",
                         f"- Status: {status}",
@@ -653,10 +671,16 @@ def main():
                     (model_dir / f"{uid}.md").write_text("\n".join(md), encoding="utf-8")
 
                     # Build result item with all data
+                    # Detect provider and normalize OpenAI-OSS to OpenAI
+                    provider = get_provider_display_name(detect_provider(model))
+                    if provider == "OpenAI-OSS":
+                        provider = "OpenAI"
+                    
                     result_item = {
                         "hf_index": row.idx,
                         "category": row.category,
                         "model": model,
+                        "provider": provider,
                         "status": status,
                         "verdict": j.get("verdict", None),
                         "safety": (j.get("safety", {}) or {}).get("label"),

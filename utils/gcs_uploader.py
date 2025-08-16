@@ -154,8 +154,14 @@ def upload_results(
             }
             
             # Create model file structure
+            # Extract provider from first result if available
+            provider = None
+            if model_results and len(model_results) > 0:
+                provider = model_results[0].get("provider")
+            
             model_file_data = {
                 "model": model,
+                "provider": provider,
                 "last_updated": datetime.now(timezone.utc).isoformat(),
                 "stats": model_stats,
                 "results": results
@@ -173,24 +179,47 @@ def upload_results(
             file_size_kb = len(model_json.encode('utf-8')) / 1024
             all_models_info[model] = {
                 **model_stats,
+                "provider": provider,
                 "file_size_kb": round(file_size_kb, 1)
             }
             
             upload_count += 1
             logger.info(f"Uploaded model data for {model} ({file_size_kb:.1f}KB)")
         
+        # Download existing metadata to merge with current run data
+        if progress_callback:
+            progress_callback("Downloading existing metadata for merge...")
+        
+        existing_metadata = {}
+        try:
+            metadata_blob = bucket.blob("latest/metadata.json")
+            if metadata_blob.exists():
+                existing_metadata = json.loads(metadata_blob.download_as_text())
+                logger.debug("Downloaded existing metadata for merge")
+        except Exception as e:
+            logger.debug(f"No existing metadata to merge: {e}")
+        
+        # Merge existing models_info with new models_info
+        # New models override existing ones (to get latest stats)
+        existing_models_info = existing_metadata.get("models_info", {})
+        existing_models_info.update(all_models_info)
+        
+        # Accumulate all models tested (existing + new)
+        all_models_tested = set(existing_metadata.get("models_tested", []))
+        all_models_tested.update(models_updated)
+        
         # Create lightweight metadata file
         if progress_callback:
-            progress_callback("Creating metadata file...")
+            progress_callback("Creating accumulated metadata file...")
         
         total_prompts = max([len(results) for results in models_data.values()]) if models_data else 0
         
         metadata = {
             "last_updated": datetime.now(timezone.utc).isoformat(),
-            "models_tested": sorted(list(models_updated)),
+            "models_tested": sorted(list(all_models_tested)),  # ALL models ever tested
             "total_prompts": total_prompts,
-            "last_run_models": sorted(list(models_updated)),
-            "models_info": all_models_info
+            "last_run_models": sorted(list(models_updated)),  # Current run models only
+            "models_info": existing_models_info  # Accumulated model info
         }
         
         # Upload metadata
@@ -215,7 +244,8 @@ def upload_results(
         
         console_url = f"https://console.cloud.google.com/storage/browser/{bucket_name}/latest"
         print(f"\n✓ Uploaded model-specific files to GCS bucket: {bucket_name}")
-        print(f"  Models updated: {', '.join(sorted(models_updated))}")
+        print(f"  Models updated this run: {', '.join(sorted(models_updated))}")
+        print(f"  Total models tracked: {len(all_models_tested)} ({', '.join(sorted(all_models_tested))})")
         print(f"  Files uploaded: {upload_count} ({metadata_size_kb:.1f}KB metadata + {len(models_updated)} model files)")
         print(f"  View at: {console_url}")
         
@@ -227,6 +257,8 @@ def upload_results(
             'base_path': 'latest',
             'console_url': console_url,
             'models_updated': list(models_updated),
+            'total_models_tracked': len(all_models_tested),
+            'all_models_tracked': sorted(list(all_models_tested)),
             'total_prompts': total_prompts,
             'metadata_size_kb': metadata_size_kb
         }
