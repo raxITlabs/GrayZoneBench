@@ -47,12 +47,12 @@ export interface BenchmarkTableRow {
   evaluations: number;
 }
 
-// Provider color mapping using design system - direct hex values
+// Provider color mapping using monochromatic scheme based on chart-1
 const PROVIDER_COLORS = {
-  'OpenAI': 'var(--chart-2)',      // Secondary color
-  'Anthropic': 'var(--chart-1)',   // Primary color  
-  'Google': 'var(--chart-3)',      // Accent color
-  'Unknown': 'var(--muted)'        // Muted color
+  'Anthropic': 'var(--chart-1)',   // Primary color (base)
+  'OpenAI': 'var(--chart-1)',      // Will be lightened programmatically
+  'Google': 'var(--chart-1)',      // Will be darkened programmatically  
+  'Unknown': 'var(--muted)'        // Muted color for unknown
 } as const;
 
 /**
@@ -336,8 +336,66 @@ export function prepareProviderScatterData(
 }
 
 /**
- * Get provider badge color for UI components
+ * Helper function to lighten a hex color
+ */
+function lightenColor(color: string, amount: number): string {
+  if (color.startsWith('#')) {
+    const hex = color.slice(1);
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    const newR = Math.min(255, Math.floor(r + (255 - r) * amount));
+    const newG = Math.min(255, Math.floor(g + (255 - g) * amount));
+    const newB = Math.min(255, Math.floor(b + (255 - b) * amount));
+    
+    return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+  }
+  return color;
+}
+
+/**
+ * Helper function to darken a hex color
+ */
+function darkenColor(color: string, amount: number): string {
+  if (color.startsWith('#')) {
+    const hex = color.slice(1);
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    const newR = Math.floor(r * (1 - amount));
+    const newG = Math.floor(g * (1 - amount));
+    const newB = Math.floor(b * (1 - amount));
+    
+    return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+  }
+  return color;
+}
+
+/**
+ * Get provider badge color for UI components using monochromatic scheme
  */
 export function getProviderColor(provider: string): string {
-  return PROVIDER_COLORS[provider as keyof typeof PROVIDER_COLORS] || PROVIDER_COLORS.Unknown;
+  if (typeof window === 'undefined') {
+    // Server-side fallback - use light mode chart-1 base color
+    const baseColor = '#644a40'; // chart-1 light mode
+    switch (provider) {
+      case 'Anthropic': return baseColor;
+      case 'OpenAI': return lightenColor(baseColor, 0.3);
+      case 'Google': return darkenColor(baseColor, 0.2);
+      default: return lightenColor(baseColor, 0.5);
+    }
+  }
+  
+  const style = getComputedStyle(document.documentElement);
+  const baseColor = style.getPropertyValue('--chart-1').trim();
+  
+  switch (provider) {
+    case 'Anthropic': return baseColor; // Primary color
+    case 'OpenAI': return lightenColor(baseColor, 0.3); // Lighter variation
+    case 'Google': return darkenColor(baseColor, 0.2); // Darker variation
+    case 'Unknown': return style.getPropertyValue('--muted').trim(); // Use muted for unknown
+    default: return lightenColor(baseColor, 0.5); // Lightest variation for others
+  }
 }

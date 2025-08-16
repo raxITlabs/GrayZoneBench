@@ -72,24 +72,64 @@ export function GraphView({
     );
   }
 
-  // Get provider colors from CSS custom properties
+  // Generate monochromatic colors based on chart-1 variable
   const getProviderColors = () => {
     if (typeof window === 'undefined') {
+      // Server-side fallback - use light mode chart-1 base color
+      const baseColor = '#644a40'; // chart-1 light mode
       return {
-        'OpenAI': '#ffdfb5',
-        'Anthropic': '#644a40', 
-        'Google': '#e8e8e8',
-        'Unknown': '#888888'
+        'Anthropic': baseColor,
+        'OpenAI': lightenColor(baseColor, 0.3),
+        'Google': darkenColor(baseColor, 0.2),
+        'Unknown': lightenColor(baseColor, 0.5)
       };
     }
     
     const style = getComputedStyle(document.documentElement);
+    const baseColor = style.getPropertyValue('--chart-1').trim();
+    
     return {
-      'OpenAI': style.getPropertyValue('--chart-2').trim(),
-      'Anthropic': style.getPropertyValue('--chart-1').trim(),
-      'Google': style.getPropertyValue('--chart-3').trim(),
-      'Unknown': style.getPropertyValue('--muted').trim()
+      'Anthropic': baseColor, // Primary color
+      'OpenAI': lightenColor(baseColor, 0.3), // Lighter variation
+      'Google': darkenColor(baseColor, 0.2), // Darker variation  
+      'Unknown': lightenColor(baseColor, 0.5) // Lightest variation
     };
+  };
+
+  // Helper function to lighten a color
+  const lightenColor = (color: string, amount: number) => {
+    if (color.startsWith('#')) {
+      // Convert hex to RGB, lighten, and return hex
+      const hex = color.slice(1);
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      
+      const newR = Math.min(255, Math.floor(r + (255 - r) * amount));
+      const newG = Math.min(255, Math.floor(g + (255 - g) * amount));
+      const newB = Math.min(255, Math.floor(b + (255 - b) * amount));
+      
+      return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+    }
+    return color; // Return original if not hex
+  };
+
+  // Helper function to darken a color
+  const darkenColor = (color: string, amount: number) => {
+    if (color.startsWith('#')) {
+      // Convert hex to RGB, darken, and return hex
+      const hex = color.slice(1);
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      
+      const newR = Math.floor(r * (1 - amount));
+      const newG = Math.floor(g * (1 - amount));
+      const newB = Math.floor(b * (1 - amount));
+      
+      return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+    }
+    return color; // Return original if not hex
   };
 
   return (
@@ -119,8 +159,8 @@ export function GraphView({
             ? ((node.data as any).size - minSize) / (maxSize - minSize)
             : 0.5; // If all sizes are the same, use medium size
           
-          // Scale to 20-50px range for much better visibility
-          return 20 + (normalizedSize * 30);
+          // Scale to 40-80px range for much better visibility
+          return 40 + (normalizedSize * 40);
         }}
         colors={({ serieId }) => getProviderColors()[serieId as keyof ReturnType<typeof getProviderColors>] || '#888888'}
         
@@ -171,21 +211,32 @@ export function GraphView({
           }
         ]}
         
-        // Interactivity
+        // Interactivity - remove useMesh to fix tooltip positioning
         isInteractive={true}
-        useMesh={true}
+        useMesh={false}
         debugMesh={false}
         tooltip={({ node }) => {
           const data = node.data as any;
           return (
-            <div className="bg-popover px-3 py-2 rounded shadow-lg border text-sm max-w-xs">
-              <div className="font-medium">{data.modelName}</div>
-              <div className="text-xs text-muted-foreground mt-1 space-y-1">
-                <div>Safety: {(data.x * 100).toFixed(1)}%</div>
-                <div>Helpfulness: {(data.y * 100).toFixed(1)}%</div>
-                <div>Effectiveness: {((data.x * data.y) * 100).toFixed(1)}%</div>
-                <div>Evaluations: {data.evaluations}</div>
-                {data.tokens > 0 && <div>Tokens: {data.tokens.toLocaleString()}</div>}
+            <div 
+              style={{
+                background: 'var(--background)',
+                color: 'var(--foreground)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '12px',
+                fontSize: '14px',
+                maxWidth: '300px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
+              }}
+            >
+              <div style={{ fontWeight: 500, marginBottom: '8px' }}>{data.modelName}</div>
+              <div style={{ fontSize: '12px', color: 'var(--muted-foreground)' }}>
+                <div style={{ marginBottom: '4px', whiteSpace: 'nowrap' }}>Safety: {(data.x * 100).toFixed(1)}%</div>
+                <div style={{ marginBottom: '4px', whiteSpace: 'nowrap' }}>Helpfulness: {(data.y * 100).toFixed(1)}%</div>
+                <div style={{ marginBottom: '4px', whiteSpace: 'nowrap' }}>Effectiveness: {((data.x * data.y) * 100).toFixed(1)}%</div>
+                <div style={{ marginBottom: '4px', whiteSpace: 'nowrap' }}>Evaluations: {data.evaluations}</div>
+                {data.tokens > 0 && <div style={{ whiteSpace: 'nowrap' }}>Tokens: {data.tokens.toLocaleString()}</div>}
               </div>
             </div>
           );
@@ -196,38 +247,38 @@ export function GraphView({
           background: 'transparent',
           text: {
             fontSize: 12,
-            fill: 'hsl(var(--foreground))',
+            fill: 'var(--foreground)',
             outlineWidth: 0,
             outlineColor: 'transparent'
           },
           axis: {
             domain: {
               line: {
-                stroke: 'hsl(var(--border))',
+                stroke: 'var(--border)',
                 strokeWidth: 1
               }
             },
             ticks: {
               line: {
-                stroke: 'hsl(var(--border))',
+                stroke: 'var(--border)',
                 strokeWidth: 1
               },
               text: {
                 fontSize: 11,
-                fill: 'hsl(var(--muted-foreground))'
+                fill: 'var(--foreground)'
               }
             },
             legend: {
               text: {
                 fontSize: 12,
-                fill: 'hsl(var(--foreground))',
+                fill: 'var(--foreground)',
                 fontWeight: 500
               }
             }
           },
           grid: {
             line: {
-              stroke: 'hsl(var(--border))',
+              stroke: 'var(--border)',
               strokeWidth: 1,
               strokeOpacity: 0.2,
               strokeDasharray: '2 2'
@@ -236,17 +287,18 @@ export function GraphView({
           legends: {
             text: {
               fontSize: 11,
-              fill: 'hsl(var(--foreground))'
+              fill: 'var(--foreground)'
             }
           },
           tooltip: {
             container: {
-              background: 'hsl(var(--popover))',
-              color: 'hsl(var(--popover-foreground))',
-              fontSize: 12,
-              borderRadius: 4,
-              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-              padding: '8px 12px'
+              background: 'var(--background)',
+              color: 'var(--foreground)',
+              fontSize: 14,
+              borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              padding: '12px',
+              border: '1px solid var(--border)'
             }
           }
         }}

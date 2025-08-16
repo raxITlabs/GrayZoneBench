@@ -4,12 +4,18 @@
 
 'use client';
 
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Settings } from 'lucide-react';
+import { 
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Settings, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface SettingsPanelProps {
   groupByProvider: boolean;
@@ -17,6 +23,8 @@ interface SettingsPanelProps {
   selectedProviders: string[];
   onProvidersChange: (providers: string[]) => void;
   availableProviders: string[];
+  onClose?: () => void;
+  isMobile?: boolean;
 }
 
 export function SettingsPanel({
@@ -24,8 +32,15 @@ export function SettingsPanel({
   onGroupByProviderChange,
   selectedProviders,
   onProvidersChange,
-  availableProviders
+  availableProviders,
+  onClose,
+  isMobile = false
 }: SettingsPanelProps) {
+  
+  // State for collapsible sections
+  const [viewModeOpen, setViewModeOpen] = useState(true);
+  const [scatterInfoOpen, setScatterInfoOpen] = useState(false);
+  const [providersOpen, setProvidersOpen] = useState(true);
   
   const handleProviderToggle = (provider: string, checked: boolean) => {
     if (checked) {
@@ -35,85 +50,108 @@ export function SettingsPanel({
     }
   };
 
-
-  // Settings panel is now always shown when rendered (only in graph tab)
-
   return (
-    <Card className="h-fit">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm flex items-center gap-2">
+    <div className="h-full flex flex-col bg-background">
+      {/* Header */}
+      <div className="sticky top-0 bg-background p-4 border-b flex items-center justify-between z-10">
+        <div className="flex items-center gap-2">
           <Settings className="w-4 h-4" />
-          Graph Settings
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Grouping Options */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">View Mode</Label>
-          <RadioGroup 
-            value={groupByProvider ? 'provider' : 'individual'} 
-            onValueChange={(value) => onGroupByProviderChange(value === 'provider')}
+          <h3 className="font-semibold text-sm">GRAPH SETTINGS</h3>
+        </div>
+        {onClose && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={onClose}
           >
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="individual" id="individual" />
-              <Label htmlFor="individual" className="text-sm">Show all models</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="provider" id="provider" />
-              <Label htmlFor="provider" className="text-sm">Group by provider</Label>
-            </div>
-          </RadioGroup>
-        </div>
-
-        {/* Visualization Info */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Scatter Plot</Label>
-          <div className="text-xs text-muted-foreground space-y-1">
-            <div>• X-axis: Safety Score (0-100%)</div>
-            <div>• Y-axis: Helpfulness Score (0-100%)</div>
-            <div>• Point size: Effectiveness (Safety × Helpfulness)</div>
-            <div>• Color: AI Provider</div>
-          </div>
-        </div>
-
-        {/* Provider Filter */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Providers</Label>
-          <div className="space-y-2">
-            {availableProviders.map((provider) => (
-              <div key={provider} className="flex items-center space-x-2">
-                <Checkbox
-                  id={provider}
-                  checked={selectedProviders.includes(provider)}
-                  onCheckedChange={(checked) => 
-                    handleProviderToggle(provider, checked as boolean)
-                  }
-                />
-                <Label htmlFor={provider} className="text-sm">
-                  {provider}
-                </Label>
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+      
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-2">
+        {/* View Mode Section */}
+        <Collapsible open={viewModeOpen} onOpenChange={setViewModeOpen}>
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-3 hover:bg-accent/50 rounded-lg transition-colors">
+            <span className="text-sm font-medium">View</span>
+            {viewModeOpen ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="px-3 pb-3">
+            <RadioGroup 
+              value={groupByProvider ? 'provider' : 'individual'} 
+              onValueChange={(value) => onGroupByProviderChange(value === 'provider')}
+              className="space-y-2 mt-2"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="individual" id="individual" />
+                <Label htmlFor="individual" className="text-sm">Show all models</Label>
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="provider" id="provider" />
+                <Label htmlFor="provider" className="text-sm">Group by provider</Label>
+              </div>
+            </RadioGroup>
+          </CollapsibleContent>
+        </Collapsible>
 
-        {/* Quick Actions */}
-        <div className="pt-2 border-t space-y-2">
-          <button
-            onClick={() => onProvidersChange(availableProviders)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Select all providers
-          </button>
-          <br />
-          <button
-            onClick={() => onProvidersChange([])}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            Clear all providers
-          </button>
-        </div>
-      </CardContent>
-    </Card>
+        {/* Graph Info Section */}
+        <Collapsible open={scatterInfoOpen} onOpenChange={setScatterInfoOpen}>
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-3 hover:bg-accent/50 rounded-lg transition-colors">
+            <span className="text-sm font-medium">Graph</span>
+            {scatterInfoOpen ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="px-3 pb-3">
+            <div className="text-xs text-muted-foreground space-y-1 mt-2">
+              <div><span className="font-medium">Y Axis:</span> Helpfulness Score (0-100%)</div>
+              <div><span className="font-medium">X Axis:</span> Safety Score (0-100%)</div>
+              <div className="pt-2 space-y-1">
+                <div><span className="font-medium">Point Size:</span> Effectiveness (Safety × Helpfulness)</div>
+                <div><span className="font-medium">Color:</span> AI Provider</div>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* Providers Section */}
+        <Collapsible open={providersOpen} onOpenChange={setProvidersOpen}>
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-3 hover:bg-accent/50 rounded-lg transition-colors">
+            <span className="text-sm font-medium">Providers</span>
+            {providersOpen ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="px-3 pb-3">
+            <div className="space-y-2 mt-2">
+              {availableProviders.map((provider) => (
+                <div key={provider} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={provider}
+                    checked={selectedProviders.includes(provider)}
+                    onCheckedChange={(checked) => 
+                      handleProviderToggle(provider, checked as boolean)
+                    }
+                  />
+                  <Label htmlFor={provider} className="text-sm cursor-pointer">
+                    {provider}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+    </div>
   );
 }
