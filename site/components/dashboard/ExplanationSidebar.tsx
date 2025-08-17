@@ -12,7 +12,7 @@ export function ExplanationSidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="space-y-4">
+    <div className="h-full flex flex-col space-y-4">
       {/* Core concept */}
       <Card className="p-4">
         <h2 className="text-xl font-semibold mb-3">GrayZoneBench</h2>
@@ -87,7 +87,7 @@ export function ExplanationSidebar() {
       </Card>
 
       {/* Quick interpretation guide */}
-      <Card className="p-4">
+      <Card className="p-4 flex-1">
         <h3 className="text-base font-medium mb-3">Reading the Chart</h3>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div className="space-y-1">

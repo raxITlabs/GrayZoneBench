@@ -133,7 +133,7 @@ export function GraphView({
   };
 
   return (
-    <div className="min-h-[500px] p-4 relative">
+    <div className="h-[550px] p-4 relative">
       {/* Quadrant background labels */}
       <div className="absolute inset-4 pointer-events-none">
         <div className="absolute top-3 left-3 text-sm font-medium text-muted-foreground/60">Over-cautious</div>

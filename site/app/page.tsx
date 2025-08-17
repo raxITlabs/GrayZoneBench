@@ -142,18 +142,18 @@ export default function DashboardPage() {
 
       {/* Main Content - Side by Side Layout */}
       <div className="container mx-auto px-4 py-6">
-        <div className="grid lg:grid-cols-[400px_1fr] gap-6 lg:items-stretch">
+        <div className="flex flex-col lg:flex-row gap-6">
           {/* Left Sidebar - Explanation (Desktop only) */}
-          <div className="hidden lg:block">
+          <div className="hidden lg:flex lg:w-[400px]">
             <ExplanationSidebar />
           </div>
           
           {/* Right Panel - Results */}
-          <div>
+          <div className="flex-1">
             <Card className="relative">
               <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'graph' | 'table')}>
                 {/* Tabs Header */}
-                <div className="p-4 border-b flex items-center justify-between">
+                <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
                   <TabsList className="grid w-[200px] grid-cols-2">
                     <TabsTrigger value="graph" className="flex items-center gap-2">
                       <BarChart3 className="w-4 h-4" />
@@ -222,7 +222,7 @@ export default function DashboardPage() {
                   )}
                 </TabsContent>
                 
-                <TabsContent value="table" className="mt-0 min-h-[500px]">
+                <TabsContent value="table" className="mt-0">
                   <TableView
                     metadata={metadata}
                     modelData={modelData}
