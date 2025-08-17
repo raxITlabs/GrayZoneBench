@@ -52,23 +52,25 @@ export function SettingsPanel({
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="sticky top-0 bg-background p-4 border-b flex items-center justify-between z-10">
-        <div className="flex items-center gap-2">
-          <Settings className="w-4 h-4" />
-          <h3 className="font-semibold text-sm">GRAPH SETTINGS</h3>
+      {/* Header - hidden on mobile since Sheet provides its own header */}
+      {!isMobile && (
+        <div className="sticky top-0 bg-background p-4 border-b flex items-center justify-between z-10">
+          <div className="flex items-center gap-2">
+            <Settings className="w-4 h-4" />
+            <h3 className="font-semibold text-sm">GRAPH SETTINGS</h3>
+          </div>
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
-        {onClose && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={onClose}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
+      )}
       
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">

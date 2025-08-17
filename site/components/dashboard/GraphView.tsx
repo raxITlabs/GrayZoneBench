@@ -133,13 +133,13 @@ export function GraphView({
   };
 
   return (
-    <div className="h-[500px] p-4 relative">
+    <div className="min-h-[500px] p-4 relative">
       {/* Quadrant background labels */}
       <div className="absolute inset-4 pointer-events-none">
-        <div className="absolute top-2 left-2 text-xs text-muted-foreground/50">Over-cautious</div>
-        <div className="absolute top-2 right-2 text-xs text-muted-foreground/50">Ideal Zone</div>
-        <div className="absolute bottom-2 left-2 text-xs text-muted-foreground/50">Poor Performance</div>
-        <div className="absolute bottom-2 right-2 text-xs text-muted-foreground/50">Risky but Helpful</div>
+        <div className="absolute top-3 left-3 text-sm font-medium text-muted-foreground/60">Over-cautious</div>
+        <div className="absolute top-3 right-3 text-sm font-medium text-muted-foreground/60">Ideal Zone</div>
+        <div className="absolute bottom-3 left-3 text-sm font-medium text-muted-foreground/60">Poor Performance</div>
+        <div className="absolute bottom-3 right-3 text-sm font-medium text-muted-foreground/60">Risky but Helpful</div>
       </div>
       
       <ResponsiveScatterPlot
@@ -246,7 +246,7 @@ export function GraphView({
         theme={{
           background: 'transparent',
           text: {
-            fontSize: 12,
+            fontSize: 14,
             fill: 'var(--foreground)',
             outlineWidth: 0,
             outlineColor: 'transparent'
@@ -264,13 +264,13 @@ export function GraphView({
                 strokeWidth: 1
               },
               text: {
-                fontSize: 11,
+                fontSize: 13,
                 fill: 'var(--foreground)'
               }
             },
             legend: {
               text: {
-                fontSize: 12,
+                fontSize: 14,
                 fill: 'var(--foreground)',
                 fontWeight: 500
               }
@@ -286,7 +286,7 @@ export function GraphView({
           },
           legends: {
             text: {
-              fontSize: 11,
+              fontSize: 13,
               fill: 'var(--foreground)'
             }
           },

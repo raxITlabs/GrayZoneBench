@@ -13,9 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GraphView } from '@/components/dashboard/GraphView';
 import { TableView } from '@/components/dashboard/TableView';
 import { SettingsPanel } from '@/components/dashboard/SettingsPanel';
-import { DataExplanation } from '@/components/dashboard/DataExplanation';
 import { BenchmarkExplanation } from '@/components/dashboard/BenchmarkExplanation';
-import { Shield, BarChart3, Table, Settings, X } from 'lucide-react';
+import { ExplanationSidebar } from '@/components/dashboard/ExplanationSidebar';
+import { Shield, BarChart3, Table, Settings } from 'lucide-react';
 import { ModeToggle } from '@/components/mode-toggle';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { getUniqueProvidersFromMetadata } from '@/libs/data-transforms';
@@ -135,34 +135,51 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
+      {/* Mobile Explanation - Above results on mobile/tablet */}
+      <div className="lg:hidden container mx-auto px-4 pb-6">
         <BenchmarkExplanation />
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - Side by Side Layout */}
       <div className="container mx-auto px-4 py-6">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'graph' | 'table')}>
-          <div className="mb-6">
-            <TabsList className="grid w-[200px] grid-cols-2">
-              <TabsTrigger value="graph" className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                Graph
-              </TabsTrigger>
-              <TabsTrigger value="table" className="flex items-center gap-2">
-                <Table className="w-4 h-4" />
-                Table
-              </TabsTrigger>
-            </TabsList>
+        <div className="grid lg:grid-cols-[400px_1fr] gap-6 lg:items-stretch">
+          {/* Left Sidebar - Explanation (Desktop only) */}
+          <div className="hidden lg:block">
+            <ExplanationSidebar />
           </div>
+          
+          {/* Right Panel - Results */}
+          <div>
+            <Card className="relative">
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'graph' | 'table')}>
+                {/* Tabs Header */}
+                <div className="p-4 border-b flex items-center justify-between">
+                  <TabsList className="grid w-[200px] grid-cols-2">
+                    <TabsTrigger value="graph" className="flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4" />
+                      Graph
+                    </TabsTrigger>
+                    <TabsTrigger value="table" className="flex items-center gap-2">
+                      <Table className="w-4 h-4" />
+                      Table
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  {/* Graph Settings - Only show when Graph tab is active */}
+                  {activeTab === 'graph' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowSettings(!showSettings)}
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      Graph Settings
+                    </Button>
+                  )}
+                </div>
 
-       
-
-          {/* Visualization Area */}
-          <div className="mb-6">
-            <TabsContent value="graph" className="mt-0">
-              <div className="relative overflow-hidden">
-                {/* Chart Container with Settings Button */}
-                <Card className="relative overflow-hidden">
+                {/* Content Area */}
+                <TabsContent value="graph" className="mt-0 relative">
                   <GraphView
                     metadata={metadata}
                     modelData={modelData}
@@ -170,70 +187,55 @@ export default function DashboardPage() {
                     selectedProviders={selectedProviders}
                   />
                   
-                  {/* Settings Button - Top Right */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute top-4 right-4 z-10"
-                    onClick={() => setShowSettings(!showSettings)}
-                  >
-                    <Settings className="w-4 h-4 mr-2" />
-                    Graph Settings
-                  </Button>
-                </Card>
+                  {/* Desktop: Overlay Settings Panel */}
+                  {!isMobile && showSettings && (
+                    <div className="absolute top-0 right-0 h-full w-80 bg-background border-l shadow-lg z-20 animate-in slide-in-from-right duration-300">
+                      <SettingsPanel
+                        groupByProvider={groupByProvider}
+                        onGroupByProviderChange={setGroupByProvider}
+                        selectedProviders={selectedProviders}
+                        onProvidersChange={setSelectedProviders}
+                        availableProviders={availableProviders}
+                        onClose={() => setShowSettings(false)}
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Mobile: Sheet/Drawer */}
+                  {isMobile && (
+                    <Sheet open={showSettings} onOpenChange={setShowSettings}>
+                      <SheetContent side="right" className="w-full sm:w-96 p-0">
+                        <SheetHeader>
+                          <SheetTitle>Graph Settings</SheetTitle>
+                        </SheetHeader>
+                        <SettingsPanel
+                          groupByProvider={groupByProvider}
+                          onGroupByProviderChange={setGroupByProvider}
+                          selectedProviders={selectedProviders}
+                          onProvidersChange={setSelectedProviders}
+                          availableProviders={availableProviders}
+                          onClose={() => setShowSettings(false)}
+                          isMobile={true}
+                        />
+                      </SheetContent>
+                    </Sheet>
+                  )}
+                </TabsContent>
                 
-                {/* Desktop: Overlay Settings Panel */}
-                {!isMobile && (
-                  <div 
-                    className={cn(
-                      "absolute top-0 right-0 h-[500px] w-80 bg-background border-l shadow-lg transform transition-transform duration-300 z-20",
-                      showSettings ? "translate-x-0 pointer-events-auto" : "translate-x-full pointer-events-none"
-                    )}
-                  >
-                    <SettingsPanel
-                      groupByProvider={groupByProvider}
-                      onGroupByProviderChange={setGroupByProvider}
-                      selectedProviders={selectedProviders}
-                      onProvidersChange={setSelectedProviders}
-                      availableProviders={availableProviders}
-                      onClose={() => setShowSettings(false)}
-                    />
-                  </div>
-                )}
-              </div>
-              
-              {/* Mobile: Sheet/Drawer */}
-              {isMobile && (
-                <Sheet open={showSettings} onOpenChange={setShowSettings}>
-                  <SheetContent side="right" className="w-full sm:w-96 p-0">
-                    <SettingsPanel
-                      groupByProvider={groupByProvider}
-                      onGroupByProviderChange={setGroupByProvider}
-                      selectedProviders={selectedProviders}
-                      onProvidersChange={setSelectedProviders}
-                      availableProviders={availableProviders}
-                      onClose={() => setShowSettings(false)}
-                      isMobile={true}
-                    />
-                  </SheetContent>
-                </Sheet>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="table" className="mt-0">
-              <Card>
-                <TableView
-                  metadata={metadata}
-                  modelData={modelData}
-                  selectedProviders={selectedProviders}
-                />
-              </Card>
-            </TabsContent>
-          </div>
-        </Tabs>
+                <TabsContent value="table" className="mt-0 min-h-[500px]">
+                  <TableView
+                    metadata={metadata}
+                    modelData={modelData}
+                    selectedProviders={selectedProviders}
+                  />
+                </TabsContent>
+              </Tabs>
+            </Card>
 
-        {/* Data Explanation */}
-        {/* <DataExplanation /> */}
+            {/* Data Explanation */}
+            {/* <DataExplanation /> */}
+          </div>
+        </div>
       </div>
     </div>
   );

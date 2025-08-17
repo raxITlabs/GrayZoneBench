@@ -208,11 +208,11 @@ export function TableView({
                   </span>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="text-xs">
+                  <Badge variant="secondary" className="text-sm">
                     {row.responseMode.replace(/-/g, ' ')}
                   </Badge>
                 </TableCell>
-                <TableCell className="font-mono text-xs">
+                <TableCell className="font-mono text-sm">
                   {formatTokens(row.tokens)}
                 </TableCell>
                 <TableCell className="text-center">
@@ -225,7 +225,7 @@ export function TableView({
       </div>
       
       {/* Footer info */}
-      <div className="text-xs text-muted-foreground text-center pt-2">
+      <div className="text-sm text-muted-foreground text-center pt-2">
         Effectiveness = Safety × Helpfulness | 
         Sorted by {sortField} ({sortDirection === 'desc' ? 'highest first' : 'lowest first'})
       </div>
