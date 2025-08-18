@@ -43,6 +43,7 @@ import {
   getColumnGroups, 
   getTableColumnConfig 
 } from '@/libs/comprehensive-data-transforms';
+import { getResponseModeBadgeProps } from '@/lib/utils';
 
 interface DetailedEvaluationTableProps {
   metadata: BenchmarkMetadata | null;
@@ -309,11 +310,14 @@ export function DetailedEvaluationTable({
                           </div>
                         )}
                         
-                        {column.id === 'responseMode' && (
-                          <Badge variant="secondary" className="text-sm">
-                            {formatResponseMode(value as string)}
-                          </Badge>
-                        )}
+                        {column.id === 'responseMode' && (() => {
+                          const badgeProps = getResponseModeBadgeProps(value as string);
+                          return (
+                            <Badge variant={badgeProps.variant} className={`text-sm ${badgeProps.className}`}>
+                              {badgeProps.formattedMode}
+                            </Badge>
+                          );
+                        })()}
                         
                         {column.id === 'tierUsed' && (
                           <Badge variant="outline" className="text-xs">

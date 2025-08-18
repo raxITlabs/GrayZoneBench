@@ -36,6 +36,7 @@ import {
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import type { ModelCardData } from '@/types/comprehensive-evaluation';
 import { prepareModelCardsData } from '@/libs/comprehensive-data-transforms';
+import { getResponseModeBadgeProps } from '@/lib/utils';
 
 interface ModelCardsProps {
   metadata: BenchmarkMetadata | null;
@@ -57,12 +58,16 @@ export function ModelCards({
   useEffect(() => {
     setMounted(true);
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768); // md breakpoint
+      if (typeof window !== 'undefined') {
+        setIsMobile(window.innerWidth < 768); // md breakpoint
+      }
     };
     
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
+    }
   }, []);
 
   // Prepare card data
@@ -115,7 +120,7 @@ export function ModelCards({
   return (
     <div className="space-y-6">
       {/* Controls - Responsive */}
-      {mounted && isMobile ? (
+      {isMobile ? (
         // Mobile Controls
         <div className="flex justify-between items-center">
           <div className="flex flex-col gap-1">
@@ -421,9 +426,14 @@ function ModelCard({ data, isMobile }: { data: ModelCardData; isMobile: boolean 
 
               {/* Response Mode */}
               <div className="mb-4">
-                <Badge variant="secondary" className="text-sm">
-                  {formatResponseMode(data.responseMode)}
-                </Badge>
+                {(() => {
+                  const badgeProps = getResponseModeBadgeProps(data.responseMode);
+                  return (
+                    <Badge variant={badgeProps.variant} className={`text-sm ${badgeProps.className}`}>
+                      {badgeProps.formattedMode}
+                    </Badge>
+                  );
+                })()}
               </div>
 
               {/* Expanded Content - Conversational */}

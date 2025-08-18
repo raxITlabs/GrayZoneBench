@@ -21,6 +21,7 @@ import { Search, Download, ArrowUpDown } from 'lucide-react';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { prepareTableData } from '@/libs/data-transforms';
 import type { BenchmarkTableRow } from '@/libs/data-transforms';
+import { getResponseModeBadgeProps } from '@/lib/utils';
 
 interface TableViewProps {
   metadata: BenchmarkMetadata | null;
@@ -219,9 +220,14 @@ export function TableView({
                   </span>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="text-sm">
-                    {formatResponseMode(row.responseMode)}
-                  </Badge>
+                  {(() => {
+                    const badgeProps = getResponseModeBadgeProps(row.responseMode);
+                    return (
+                      <Badge variant={badgeProps.variant} className={`text-sm ${badgeProps.className}`}>
+                        {badgeProps.formattedMode}
+                      </Badge>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell className="font-mono text-sm">
                   {formatTokens(row.tokens)}
