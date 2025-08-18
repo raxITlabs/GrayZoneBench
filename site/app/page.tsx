@@ -14,6 +14,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GraphView } from '@/components/dashboard/GraphView';
 import { TableView } from '@/components/dashboard/TableView';
+import { ModelCards } from '@/components/dashboard/ModelCards';
+import { DetailedEvaluationTable } from '@/components/dashboard/DetailedEvaluationTable';
 import { SettingsPanel } from '@/components/dashboard/SettingsPanel';
 import { ExplanationSidebar } from '@/components/dashboard/ExplanationSidebar';
 import { Shield, BarChart3, Table, Settings } from 'lucide-react';
@@ -142,7 +144,7 @@ export default function DashboardPage() {
             <div>
               <h1 className="text-xl md:text-2xl font-bold">GrayZoneBench</h1>
               <p className="text-muted-foreground mt-1 text-sm md:text-base">
-                Evaluating gray zone navigation across AI providers
+                Evaluating how models handle prompts that in the gray zone between safe and unsafe
               </p>
             </div>
           </div>
@@ -150,8 +152,9 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Main Content - Side by Side Layout */}
+      {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
+        {/* Graph/Table Section with Sidebar */}
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Sidebar - Explanation (Shows above content on mobile, left side on desktop) */}
           <aside className="w-full lg:w-[400px] lg:flex">
@@ -162,7 +165,7 @@ export default function DashboardPage() {
             />
           </aside>
           
-          {/* Right Panel - Results */}
+          {/* Right Panel - Graph/Table Only */}
           <div className="flex-1">
             <Card className="relative">
               <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'graph' | 'table')}>
@@ -245,10 +248,33 @@ export default function DashboardPage() {
                 </TabsContent>
               </Tabs>
             </Card>
-
-            {/* Data Explanation */}
-            {/* <DataExplanation /> */}
           </div>
+        </div>
+
+        {/* Enhanced Model Cards Section - Full Width */}
+        <div className="mt-8">
+          <Card>
+            <div className="p-6">
+              <ModelCards
+                metadata={metadata}
+                modelData={modelData}
+                selectedProviders={selectedProviders}
+              />
+            </div>
+          </Card>
+        </div>
+
+        {/* Detailed Evaluation Table Section - Full Width */}
+        <div className="mt-8">
+          <Card>
+            <div className="p-6">
+              <DetailedEvaluationTable
+                metadata={metadata}
+                modelData={modelData}
+                selectedProviders={selectedProviders}
+              />
+            </div>
+          </Card>
         </div>
       </main>
     </div>

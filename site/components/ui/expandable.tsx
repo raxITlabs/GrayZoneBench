@@ -120,12 +120,10 @@ const Expandable = React.forwardRef<HTMLDivElement, ExpandableProps>(
         <motion.div
           ref={ref}
           initial={false}
-          animate={{
-            transition: {
-              duration: transitionDuration,
-              ease: easeType,
-              delay: initialDelay,
-            },
+          transition={{
+            duration: transitionDuration,
+            ease: easeType as any,
+            delay: initialDelay,
           }}
           {...props}
         >
@@ -286,7 +284,7 @@ const ExpandableContent = React.forwardRef<
           height: smoothHeight,
           overflow: "hidden",
         }}
-        transition={{ duration: transitionDuration, ease: easeType }}
+        transition={{ duration: transitionDuration, ease: easeType as any }}
         {...props}
       >
         {/* AnimatePresence handles the entering and exiting of components */}
@@ -298,7 +296,7 @@ const ExpandableContent = React.forwardRef<
               initial={animationProps.initial}
               animate={animationProps.animate}
               exit={animationProps.exit}
-              transition={{ duration: transitionDuration, ease: easeType }}
+              transition={{ duration: transitionDuration, ease: easeType as any }}
             >
               {stagger ? (
                 // If stagger is true, we apply a staggered animation to the children
@@ -441,7 +439,7 @@ const ExpandableCard = React.forwardRef<HTMLDivElement, ExpandableCardProps>(
         >
           {/* Nested divs purely for styling and layout (the shadow ring around the card) */}
           <div className="grid grid-cols-1 rounded-lg sm:rounded-xl md:rounded-[2rem] p-1 sm:p-1.5 md:p-2 shadow-md shadow-black/5">
-            <div className="rounded-md sm:rounded-lg md:rounded-3xl bg-white p-2 sm:p-3 md:p-4 shadow-xl ring-1 ring-black/5">
+            <div className="rounded-md sm:rounded-lg md:rounded-3xl bg-card p-2 sm:p-3 md:p-4 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
               <div className="w-full h-full overflow-hidden">
                 {/* Ref for measuring content dimensions (so we can let framer know to animate into the dimensions) */}
                 <div ref={measureRef} className="flex flex-col h-full">

@@ -29,19 +29,19 @@ export function ExplanationSidebar({
       <Card className="p-4 lg:p-4">
         {/* <h2 className="text-xl font-semibold mb-3">GrayZoneBench</h2> */}
         <p className="text-base text-muted-foreground mb-4 leading-relaxed">
-          Evaluating AI safety in the &ldquo;gray zone&rdquo; between helpful and harmful responses using OpenAI&apos;s safe-completion paradigm.
+          We test how well AI models handle tricky requests that aren&apos;t clearly good or bad—using real scenarios where safety and helpfulness both matter.
         </p>
         
         {/* Key metrics explanation */}
         <div className="space-y-3 mb-4">
           <div className="text-base">
-            <span className="font-medium">Safety Score:</span> How consistently models avoid harmful content
+            <span className="font-medium text-foreground">Safety Score:</span> How well models refuse risky requests while staying helpful
           </div>
           <div className="text-base">
-            <span className="font-medium">Helpfulness:</span> Quality of assistance for legitimate requests
+            <span className="font-medium text-foreground">Helpfulness:</span> How useful responses are when the request is good
           </div>
           <div className="text-base">
-            <span className="font-medium">Effectiveness:</span> Safety × Helpfulness (multiplicative scoring)
+            <span className="font-medium">Effectiveness:</span> The sweet spot where safety meets usefulness
           </div>
         </div>
 
