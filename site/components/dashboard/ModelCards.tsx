@@ -186,7 +186,7 @@ export function ModelCards({
       {/* Cards Grid - Responsive with proper spacing */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 items-start">
         {displayData.map((card) => (
-          <ModelCard key={card.model} data={card} />
+          <ModelCard key={card.model} data={card} isMobile={isMobile} />
         ))}
       </div>
 
@@ -261,7 +261,7 @@ export function ModelCards({
   );
 }
 
-function ModelCard({ data }: { data: ModelCardData }) {
+function ModelCard({ data, isMobile }: { data: ModelCardData; isMobile: boolean }) {
   const formatScore = (score: number) => `${(score * 100).toFixed(1)}%`;
   const formatNumber = (num: number) => num.toLocaleString();
   const formatCurrency = (amount: number) => `$${amount.toFixed(4)}`;
@@ -300,16 +300,16 @@ function ModelCard({ data }: { data: ModelCardData }) {
 
   return (
     <Expandable
-      expandDirection="vertical"
-      expandBehavior="replace"
+      expandDirection="both"
+      expandBehavior="push"
       onExpandStart={() => console.log(`Expanding ${data.model} card...`)}
     >
       {({ isExpanded }) => (
         <ExpandableTrigger>
           <ExpandableCard
-            className={`w-full relative ${isExpanded ? 'z-20 shadow-2xl' : ''}`}
-            collapsedSize={{ height: 320 }}
-            expandedSize={{ height: undefined }}
+            className="w-full relative"
+            collapsedSize={{ width: 320, height: 320 }}
+            expandedSize={isMobile ? { width: 360, height: undefined } : { width: 450, height: undefined }}
             hoverToExpand={false}
             expandDelay={200}
             collapseDelay={300}
@@ -318,7 +318,7 @@ function ModelCard({ data }: { data: ModelCardData }) {
               <div className="w-full">
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
-                    <ProviderLogo provider={data.provider} size={24} />
+                    <ProviderLogo provider={data.provider} size={28} />
                     <Badge variant="secondary" className="text-xs">
                       {data.provider}
                     </Badge>
