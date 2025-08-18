@@ -17,7 +17,7 @@ import { TableView } from '@/components/dashboard/TableView';
 import { SettingsPanel } from '@/components/dashboard/SettingsPanel';
 import { ExplanationSidebar } from '@/components/dashboard/ExplanationSidebar';
 import { Shield, BarChart3, Table, Settings } from 'lucide-react';
-import { ModeToggle } from '@/components/mode-toggle';
+import SwitchButton from '@/components/kokonutui/switch-button';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { getUniqueProvidersFromMetadata } from '@/libs/data-transforms';
 import { cn } from '@/lib/utils';
@@ -125,7 +125,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="container mx-auto px-4 py-4 md:py-6">
+      <header className="container mx-auto px-4 py-4 md:py-6">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-2 md:gap-3">
             {mounted ? (
@@ -140,27 +140,27 @@ export default function DashboardPage() {
               <Shield className="w-8 h-8 md:w-10 md:h-10 text-primary mt-1" />
             )}
             <div>
-              <h1 className="text-lg md:text-2xl font-bold">GrayZoneBench</h1>
+              <h1 className="text-xl md:text-2xl font-bold">GrayZoneBench</h1>
               <p className="text-muted-foreground mt-1 text-sm md:text-base">
                 Evaluating gray zone navigation across AI providers
               </p>
             </div>
           </div>
-          <ModeToggle />
+          <SwitchButton />
         </div>
-      </div>
+      </header>
 
       {/* Main Content - Side by Side Layout */}
-      <div className="container mx-auto px-4 py-6">
+      <main className="container mx-auto px-4 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Sidebar - Explanation (Shows above content on mobile, left side on desktop) */}
-          <div className="w-full lg:w-[400px] lg:flex">
+          <aside className="w-full lg:w-[400px] lg:flex">
             <ExplanationSidebar 
               activeTab={activeTab}
               modelData={modelData}
               metadata={metadata}
             />
-          </div>
+          </aside>
           
           {/* Right Panel - Results */}
           <div className="flex-1">
@@ -250,7 +250,7 @@ export default function DashboardPage() {
             {/* <DataExplanation /> */}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

@@ -34,13 +34,13 @@ export function ExplanationSidebar({
         
         {/* Key metrics explanation */}
         <div className="space-y-3 mb-4">
-          <div className="text-sm">
+          <div className="text-base">
             <span className="font-medium">Safety Score:</span> How consistently models avoid harmful content
           </div>
-          <div className="text-sm">
+          <div className="text-base">
             <span className="font-medium">Helpfulness:</span> Quality of assistance for legitimate requests
           </div>
-          <div className="text-sm">
+          <div className="text-base">
             <span className="font-medium">Effectiveness:</span> Safety × Helpfulness (multiplicative scoring)
           </div>
         </div>
@@ -58,7 +58,7 @@ export function ExplanationSidebar({
           </Button>
           
           {isExpanded && (
-            <div className="space-y-3 text-sm text-muted-foreground leading-relaxed">
+            <div className="space-y-3 text-base text-muted-foreground leading-relaxed">
               <p>
                 When OpenAI announced GPT-5, they highlighted &ldquo;safe completion&rdquo;&mdash;models assess user intent rather than bluntly refusing requests. This caught our attention in nuanced &ldquo;gray areas,&rdquo; especially with dual-use scenarios.
               </p>

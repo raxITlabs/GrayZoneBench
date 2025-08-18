@@ -124,11 +124,11 @@ export function TableView({
       .join(' ');
   };
   
-  // Get score color class using CSS variables
+  // Get score color and style classes using CSS variables for optimal readability in both light/dark modes
   const getScoreColorClass = (score: number, thresholds: { high: number; medium: number }) => {
-    if (score >= thresholds.high) return 'text-chart-1'; // Good performance
-    if (score >= thresholds.medium) return 'text-chart-2'; // Warning/moderate
-    return 'text-destructive'; // Poor performance
+    if (score >= thresholds.high) return 'text-chart-1 font-semibold'; // Good performance - uses existing chart-1 color
+    if (score >= thresholds.medium) return 'text-foreground font-medium'; // Warning/moderate - use primary text color for readability
+    return 'text-destructive font-semibold'; // Poor performance - uses existing destructive color
   };
 
   const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
@@ -213,8 +213,8 @@ export function TableView({
                     {formatScore(row.helpfulness)}
                   </span>
                 </TableCell>
-                <TableCell className="font-mono font-semibold">
-                  <span className={getScoreColorClass(row.effectiveness, { high: 0.5, medium: 0.3 })}>
+                <TableCell className="font-mono">
+                  <span className={`${getScoreColorClass(row.effectiveness, { high: 0.5, medium: 0.3 })} font-bold`}>
                     {formatScore(row.effectiveness)}
                   </span>
                 </TableCell>

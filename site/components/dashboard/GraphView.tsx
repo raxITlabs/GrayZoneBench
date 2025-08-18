@@ -8,6 +8,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { ResponsiveScatterPlot } from '@nivo/scatterplot';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { prepareScatterData, prepareProviderScatterData } from '@/libs/data-transforms';
+import { GraphLegend } from './GraphLegend';
 
 interface GraphViewProps {
   metadata: BenchmarkMetadata | null;
@@ -143,21 +144,32 @@ export function GraphView({
     return color; // Return original if not hex
   };
 
+  // Prepare legend data
+  const legendData = useMemo(() => {
+    return scatterData.map(serie => ({
+      id: serie.id as string,
+      color: serie.color as string,
+      dataCount: serie.data.length
+    }));
+  }, [scatterData]);
+
   return (
-    <div className="h-[400px] md:h-[550px] p-2 md:p-4 relative">
-      {/* Quadrant background labels */}
-      <div className="absolute inset-2 md:inset-4 pointer-events-none">
-        <div className="absolute top-3 left-3 text-xs md:text-sm font-medium text-muted-foreground/60 hidden md:block">Over-cautious</div>
-        <div className="absolute top-3 right-3 text-xs md:text-sm font-medium text-muted-foreground/60 hidden md:block">Ideal Zone</div>
-        <div className="absolute bottom-3 left-3 text-xs md:text-sm font-medium text-muted-foreground/60 hidden md:block">Poor Performance</div>
-        <div className="absolute bottom-3 right-3 text-xs md:text-sm font-medium text-muted-foreground/60 hidden md:block">Risky but Helpful</div>
-      </div>
+    <div className="h-[400px] md:h-[550px] p-2 md:p-4 relative flex">
+      {/* Main chart area */}
+      <div className="flex-1 relative">
+        {/* Quadrant background labels */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-1 left-3 text-sm font-medium text-muted-foreground/60">Over-cautious</div>
+          <div className="absolute top-1 right-3 text-sm font-medium text-muted-foreground/60">Ideal Zone</div>
+          <div className="absolute bottom-3 left-3 text-sm font-medium text-muted-foreground/60">Poor Performance</div>
+          <div className="absolute bottom-3 right-3 text-sm font-medium text-muted-foreground/60">Risky but Helpful</div>
+        </div>
       
-      <ResponsiveScatterPlot
-        data={scatterData}
-        margin={isMobile 
-          ? { top: 40, right: 20, bottom: 60, left: 60 }
-          : { top: 60, right: 140, bottom: 70, left: 70 }}
+        <ResponsiveScatterPlot
+          data={scatterData}
+          margin={isMobile 
+            ? { top: 40, right: 20, bottom: 60, left: 60 }
+            : { top: 60, right: 20, bottom: 70, left: 70 }}
         xScale={{ type: 'linear', min: 0, max: 1 }}
         yScale={{ type: 'linear', min: 0, max: 1 }}
         blendMode="normal"
@@ -207,22 +219,8 @@ export function GraphView({
         gridXValues={[0, 0.2, 0.4, 0.6, 0.8, 1.0]}
         gridYValues={[0, 0.2, 0.4, 0.6, 0.8, 1.0]}
         
-        // Legend - hide on mobile for space
-        legends={!isMobile ? [
-          {
-            anchor: 'right',
-            direction: 'column',
-            justify: false,
-            translateX: 130,
-            translateY: 0,
-            itemWidth: 100,
-            itemHeight: 20,
-            itemsSpacing: 5,
-            itemDirection: 'left-to-right',
-            symbolSize: 12,
-            symbolShape: 'circle'
-          }
-        ] : []}
+        // Disable built-in legend - using custom legend
+        legends={[]}
         
         // Interactivity - remove useMesh to fix tooltip positioning
         isInteractive={true}
@@ -315,7 +313,15 @@ export function GraphView({
             }
           }
         }}
-      />
+        />
+      </div>
+      
+      {/* Custom Legend - only on desktop */}
+      {!isMobile && (
+        <div className="w-36 ml-4 flex-shrink-0">
+          <GraphLegend items={legendData} />
+        </div>
+      )}
     </div>
   );
 }
