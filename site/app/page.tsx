@@ -23,6 +23,7 @@ import SwitchButton from '@/components/kokonutui/switch-button';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { getUniqueProvidersFromMetadata } from '@/libs/data-transforms';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function DashboardPage() {
   const [metadata, setMetadata] = useState<BenchmarkMetadata | null>(null);
@@ -39,21 +40,11 @@ export default function DashboardPage() {
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   
-  // Check if mobile/tablet
-  const [isMobile, setIsMobile] = useState(false);
+  // Check if mobile/tablet (1024px breakpoint for layout decisions)
+  const isMobile = useIsMobile(1024);
   
   useEffect(() => {
     setMounted(true);
-  }, []);
-  
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024); // lg breakpoint
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // Fetch data on mount
@@ -127,7 +118,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="container mx-auto px-4 py-4 md:py-6">
+      <header className="container mx-auto px-4 py-3 md:py-6">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-2 md:gap-3">
             {mounted ? (
@@ -136,14 +127,14 @@ export default function DashboardPage() {
                 alt="GrayZoneBench Logo"
                 width={40}
                 height={40}
-                className="w-8 h-8 md:w-10 md:h-10 mt-1"
+                className="w-10 h-10 md:w-12 md:h-12 mt-1"
               />
             ) : (
-              <Shield className="w-8 h-8 md:w-10 md:h-10 text-primary mt-1" />
+              <Shield className="w-10 h-10 md:w-12 md:h-12 text-primary mt-1" />
             )}
             <div>
-              <h1 className="text-xl md:text-2xl font-bold">GrayZoneBench</h1>
-              <p className="text-muted-foreground mt-1 text-sm md:text-base">
+              <h1 className="text-2xl md:text-3xl font-bold">GrayZoneBench</h1>
+              <p className="text-muted-foreground mt-1 text-base md:text-lg">
                 Evaluating how models handle prompts that in the gray zone between safe and unsafe
               </p>
             </div>

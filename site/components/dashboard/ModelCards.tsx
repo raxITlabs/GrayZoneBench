@@ -37,6 +37,7 @@ import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import type { ModelCardData } from '@/types/comprehensive-evaluation';
 import { prepareModelCardsData } from '@/libs/comprehensive-data-transforms';
 import { getResponseModeBadgeProps } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ModelCardsProps {
   metadata: BenchmarkMetadata | null;
@@ -52,23 +53,7 @@ export function ModelCards({
   const [showAll, setShowAll] = useState(false);
   const [sortBy, setSortBy] = useState<'effectiveness' | 'safety' | 'helpfulness'>('effectiveness');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const checkMobile = () => {
-      if (typeof window !== 'undefined') {
-        setIsMobile(window.innerWidth < 768); // md breakpoint
-      }
-    };
-    
-    checkMobile();
-    if (typeof window !== 'undefined') {
-      window.addEventListener('resize', checkMobile);
-      return () => window.removeEventListener('resize', checkMobile);
-    }
-  }, []);
+  const isMobile = useIsMobile(768); // md breakpoint
 
   // Prepare card data
   const cardsData = useMemo(() => {

@@ -4,11 +4,12 @@
 
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { ResponsiveScatterPlot } from '@nivo/scatterplot';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { prepareScatterData, prepareProviderScatterData } from '@/libs/data-transforms';
 import { GraphLegend } from './GraphLegend';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface GraphViewProps {
   metadata: BenchmarkMetadata | null;
@@ -23,17 +24,7 @@ export function GraphView({
   groupByProvider,
   selectedProviders
 }: GraphViewProps) {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useIsMobile(768);
   
   // Prepare scatter plot data
   const scatterData = useMemo(() => {
