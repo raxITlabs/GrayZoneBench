@@ -21,7 +21,8 @@ import {
   XCircle,
   Clock,
   DollarSign,
-  Settings
+  Settings,
+  MessageSquare
 } from 'lucide-react';
 import {
   Expandable,
@@ -298,6 +299,64 @@ function ModelCard({ data, isMobile }: { data: ModelCardData; isMobile: boolean 
       <XCircle className="w-4 h-4 text-muted-foreground" />;
   };
 
+  // Conversational explanation helpers
+  const getEffectivenessStory = () => {
+    const effectiveness = data.effectiveness * 100;
+    const safety = data.safety * 100;
+    const helpfulness = data.helpfulness * 100;
+    
+    if (effectiveness >= 50) {
+      return `This model achieved a strong ${effectiveness.toFixed(1)}% effectiveness score by balancing helpful responses (${helpfulness.toFixed(1)}%) with safety considerations (${safety.toFixed(1)}%).`;
+    } else if (effectiveness >= 30) {
+      return `This model shows moderate effectiveness (${effectiveness.toFixed(1)}%) - it's ${helpfulness >= 70 ? 'quite helpful' : 'somewhat helpful'} but ${safety < 70 ? 'requires caution due to safety concerns' : 'maintains reasonable safety'}.`;
+    } else {
+      return `This model has limited effectiveness (${effectiveness.toFixed(1)}%) due to ${safety < 50 ? 'significant safety concerns' : 'low helpfulness'}, requiring careful consideration before use.`;
+    }
+  };
+
+  const getEvaluationStory = () => {
+    const tier = data.tierUsed;
+    if (tier === 'deterministic') {
+      return "We assessed this model using our automated rule-based system - the responses followed clear patterns that our deterministic analysis could handle.";
+    } else if (tier === 'moderation') {
+      return "We assessed this model using our 3-tier evaluation system: automated rules, content moderation API, with the moderation layer making the final determination.";
+    } else {
+      return "We assessed this model using our full 3-tier evaluation system: automated rules, content moderation, and AI-based analysis, with the AI evaluator making the final judgment.";
+    }
+  };
+
+  const getResponseModeStory = () => {
+    const mode = data.responseMode;
+    if (mode === 'direct-answer') {
+      return "This model tends to provide direct answers to questions, even when they involve sensitive topics.";
+    } else if (mode === 'constructive-refusal') {
+      return "This model thoughtfully declines harmful requests while explaining why and often suggesting safer alternatives.";
+    } else if (mode === 'safe-completion') {
+      return "This model finds creative ways to be helpful while steering conversations away from harmful content.";
+    } else {
+      return "This model shows varied response patterns depending on the type of request.";
+    }
+  };
+
+  const getKeyStrengths = () => {
+    const strengths = [];
+    if (data.helpfulness > 0.8) strengths.push("Provides comprehensive, useful responses");
+    if (data.safety > 0.7) strengths.push("Maintains strong safety boundaries");
+    if (data.alternativesProvided) strengths.push("Offers helpful alternatives when declining requests");
+    if (data.educationProvided) strengths.push("Provides educational context");
+    if (data.explanationProvided) strengths.push("Explains its reasoning");
+    return strengths.length > 0 ? strengths : ["Shows consistent response patterns"];
+  };
+
+  const getConcerns = () => {
+    const concerns = [];
+    if (data.safety < 0.5) concerns.push("May provide information that could facilitate harmful activities");
+    else if (data.safety < 0.7) concerns.push("Occasionally provides concerning responses in sensitive areas");
+    if (data.helpfulness < 0.5) concerns.push("Limited helpfulness in providing useful information");
+    if (data.meaningfulFacilitation > 0.3) concerns.push("Sometimes provides information that could lower barriers to harm");
+    return concerns.length > 0 ? concerns : ["No significant concerns identified"];
+  };
+
   return (
     <Expandable
       expandDirection="both"
@@ -367,109 +426,75 @@ function ModelCard({ data, isMobile }: { data: ModelCardData; isMobile: boolean 
                 </Badge>
               </div>
 
-              {/* Expanded Content */}
-              <ExpandableContent preset="fade" stagger staggerChildren={0.1} className="overflow-y-auto max-h-[400px]">
-                <div className="space-y-4">
-                  {/* Performance Breakdown */}
+              {/* Expanded Content - Conversational */}
+              <ExpandableContent preset="fade" stagger staggerChildren={0.1} className="overflow-y-auto max-h-[600px]">
+                <div className="space-y-4 text-sm">
+                  {/* How We Evaluated This Model */}
                   <div>
                     <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
                       <TrendingUp className="w-4 h-4" />
-                      Performance Details
+                      How We Evaluated This Model
                     </h4>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="flex justify-between">
-                        <span>Gray Zone Navigation:</span>
-                        <span className="font-mono">{formatScore(data.navigationQuality)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Gray Zone Effectiveness:</span>
-                        <span className="font-mono">{formatScore(data.grayZoneEffectiveness)}</span>
-                      </div>
+                    <div className="text-xs leading-relaxed text-muted-foreground mb-2">
+                      {getEffectivenessStory()}
+                    </div>
+                    <div className="text-xs leading-relaxed text-muted-foreground">
+                      {getEvaluationStory()}
                     </div>
                   </div>
 
-                  {/* Evaluation Pipeline */}
+                  {/* Response Approach */}
                   <div>
                     <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                      {getTierIcon(data.tierUsed)}
-                      Evaluation Pipeline
+                      <MessageSquare className="w-4 h-4" />
+                      Response Approach
                     </h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1">
-                          <Target className="w-3 h-3" />
-                          Deterministic:
-                        </span>
-                        <span className="font-mono">{formatScore(data.deterministicScore)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1">
-                          <Shield className="w-3 h-3" />
-                          Moderation:
-                        </span>
-                        <span className="font-mono">{formatScore(data.moderationScore)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1">
-                          <HelpCircle className="w-3 h-3" />
-                          Agent:
-                        </span>
-                        <span className="font-mono">{formatScore(data.agentScore)}</span>
-                      </div>
-                      <div className="pt-1 border-t">
-                        <Badge variant="secondary" className="text-xs">
-                          Final: {data.tierUsed.charAt(0).toUpperCase() + data.tierUsed.slice(1)}
-                        </Badge>
-                      </div>
+                    <div className="text-xs leading-relaxed text-muted-foreground mb-2">
+                      {getResponseModeStory()}
                     </div>
                   </div>
 
-                  {/* Response Analysis */}
+                  {/* What This Model Does Well */}
                   <div>
                     <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4" />
-                      Response Analysis
+                      <CheckCircle className="w-4 h-4 text-chart-1" />
+                      What This Model Does Well
                     </h4>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div className="flex items-center gap-1">
-                        {getBooleanIcon(data.alternativesProvided)}
-                        <span>Alternatives</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {getBooleanIcon(data.educationProvided)}
-                        <span>Education</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {getBooleanIcon(data.explanationProvided)}
-                        <span>Explanation</span>
-                      </div>
-                    </div>
-                    <div className="mt-2 text-xs">
-                      <div className="flex justify-between">
-                        <span>Refusal Confidence:</span>
-                        <span className="font-mono">{formatScore(data.refusalConfidence)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Harm Assessment */}
-                  <div>
-                    <h4 className="font-medium text-sm mb-2">Harm Assessment</h4>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">Facilitation:</span>
-                        <div className="font-mono">{formatScore(data.meaningfulFacilitation)}</div>
-                        <Badge variant="outline" className="text-xs mt-1">
-                          {data.facilitationLevel}
-                        </Badge>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Harm Level:</span>
-                        <div className="mt-1">
-                          <Badge variant="outline" className="text-xs">
-                            {data.harmLevel}
-                          </Badge>
+                    <div className="space-y-1">
+                      {getKeyStrengths().map((strength, index) => (
+                        <div key={index} className="flex items-start gap-2 text-xs">
+                          <div className="w-1 h-1 rounded-full bg-chart-1 mt-2 flex-shrink-0" />
+                          <span className="text-muted-foreground leading-relaxed">{strength}</span>
                         </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Areas to Consider */}
+                  <div>
+                    <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                      Areas to Consider
+                    </h4>
+                    <div className="space-y-1">
+                      {getConcerns().map((concern, index) => (
+                        <div key={index} className="flex items-start gap-2 text-xs">
+                          <div className="w-1 h-1 rounded-full bg-yellow-500 mt-2 flex-shrink-0" />
+                          <span className="text-muted-foreground leading-relaxed">{concern}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Bottom Line */}
+                  <div className="pt-2 border-t">
+                    <h4 className="font-medium text-sm mb-2">The Bottom Line</h4>
+                    <div className="bg-muted/30 rounded-md p-3">
+                      <div className="text-xs leading-relaxed">
+                        <span className="font-medium">Best for:</span> {data.helpfulness > 0.7 ? "General helpful tasks, information gathering" : "Basic queries with supervision"}
+                      </div>
+                      <div className="text-xs leading-relaxed mt-1">
+                        <span className="font-medium">Use caution for:</span> {data.safety < 0.7 ? "Sensitive topics, potentially harmful requests" : "Complex ethical scenarios"}
                       </div>
                     </div>
                   </div>
@@ -483,10 +508,6 @@ function ModelCard({ data, isMobile }: { data: ModelCardData; isMobile: boolean 
                   <div className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     <span>{data.responseTime.toFixed(2)}s avg</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <DollarSign className="w-3 h-3" />
-                    <span>{formatCurrency(data.costEstimate)}</span>
                   </div>
                   <div>
                     {formatNumber(data.totalTokens)} tokens
