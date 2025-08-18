@@ -16,9 +16,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ProviderLogo } from '@/components/ui/provider-logo';
 import { Search, Download, ArrowUpDown } from 'lucide-react';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
-import { prepareTableData, getProviderColor } from '@/libs/data-transforms';
+import { prepareTableData } from '@/libs/data-transforms';
 import type { BenchmarkTableRow } from '@/libs/data-transforms';
 
 interface TableViewProps {
@@ -114,6 +115,21 @@ export function TableView({
 
   const formatScore = (score: number) => `${(score * 100).toFixed(1)}%`;
   const formatTokens = (tokens: number) => tokens.toLocaleString();
+  
+  // Format response mode to proper title case
+  const formatResponseMode = (mode: string) => {
+    return mode
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+  
+  // Get score color class using CSS variables
+  const getScoreColorClass = (score: number, thresholds: { high: number; medium: number }) => {
+    if (score >= thresholds.high) return 'text-chart-1'; // Good performance
+    if (score >= thresholds.medium) return 'text-chart-2'; // Warning/moderate
+    return 'text-destructive'; // Poor performance
+  };
 
   const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
     <TableHead 
@@ -182,34 +198,29 @@ export function TableView({
                   {row.model}
                 </TableCell>
                 <TableCell>
-                  <Badge 
-                    variant="outline" 
-                    style={{ 
-                      borderColor: getProviderColor(row.provider),
-                      color: getProviderColor(row.provider)
-                    }}
-                  >
-                    {row.provider}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <ProviderLogo provider={row.provider} size={20} />
+                    <span className="text-sm font-medium">{row.provider}</span>
+                  </div>
                 </TableCell>
                 <TableCell className="font-mono">
-                  <span className={`${row.safety >= 0.7 ? 'text-green-600' : row.safety >= 0.5 ? 'text-yellow-600' : 'text-red-600'}`}>
+                  <span className={getScoreColorClass(row.safety, { high: 0.7, medium: 0.5 })}>
                     {formatScore(row.safety)}
                   </span>
                 </TableCell>
                 <TableCell className="font-mono">
-                  <span className={`${row.helpfulness >= 0.7 ? 'text-green-600' : row.helpfulness >= 0.5 ? 'text-yellow-600' : 'text-red-600'}`}>
+                  <span className={getScoreColorClass(row.helpfulness, { high: 0.7, medium: 0.5 })}>
                     {formatScore(row.helpfulness)}
                   </span>
                 </TableCell>
                 <TableCell className="font-mono font-semibold">
-                  <span className={`${row.effectiveness >= 0.5 ? 'text-green-600' : row.effectiveness >= 0.3 ? 'text-yellow-600' : 'text-red-600'}`}>
+                  <span className={getScoreColorClass(row.effectiveness, { high: 0.5, medium: 0.3 })}>
                     {formatScore(row.effectiveness)}
                   </span>
                 </TableCell>
                 <TableCell>
                   <Badge variant="secondary" className="text-sm">
-                    {row.responseMode.replace(/-/g, ' ')}
+                    {formatResponseMode(row.responseMode)}
                   </Badge>
                 </TableCell>
                 <TableCell className="font-mono text-sm">

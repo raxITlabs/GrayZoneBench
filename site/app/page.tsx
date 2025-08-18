@@ -6,6 +6,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { useTheme } from 'next-themes';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -13,7 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GraphView } from '@/components/dashboard/GraphView';
 import { TableView } from '@/components/dashboard/TableView';
 import { SettingsPanel } from '@/components/dashboard/SettingsPanel';
-import { BenchmarkExplanation } from '@/components/dashboard/BenchmarkExplanation';
 import { ExplanationSidebar } from '@/components/dashboard/ExplanationSidebar';
 import { Shield, BarChart3, Table, Settings } from 'lucide-react';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -26,6 +27,8 @@ export default function DashboardPage() {
   const [modelData, setModelData] = useState<Record<string, ModelData>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
   
   // View settings
   const [activeTab, setActiveTab] = useState<'graph' | 'table'>('graph');
@@ -36,6 +39,10 @@ export default function DashboardPage() {
   
   // Check if mobile/tablet
   const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   useEffect(() => {
     const checkMobile = () => {
@@ -118,34 +125,41 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="border-b bg-card">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3">
-              <Shield className="w-8 h-8 text-primary mt-1" />
-              <div>
-                <h1 className="text-2xl font-bold">GrayZoneBench: AI Safety Evaluation Platform</h1>
-                <p className="text-muted-foreground mt-1">
-                  Evaluating gray zone navigation across AI providers
-                </p>
-              </div>
+      <div className="container mx-auto px-4 py-4 md:py-6">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-2 md:gap-3">
+            {mounted ? (
+              <Image
+                src={resolvedTheme === 'dark' ? '/logo/logo-dark.svg' : '/logo/logo-light.svg'}
+                alt="GrayZoneBench Logo"
+                width={40}
+                height={40}
+                className="w-8 h-8 md:w-10 md:h-10 mt-1"
+              />
+            ) : (
+              <Shield className="w-8 h-8 md:w-10 md:h-10 text-primary mt-1" />
+            )}
+            <div>
+              <h1 className="text-lg md:text-2xl font-bold">GrayZoneBench</h1>
+              <p className="text-muted-foreground mt-1 text-sm md:text-base">
+                Evaluating gray zone navigation across AI providers
+              </p>
             </div>
-            <ModeToggle />
           </div>
+          <ModeToggle />
         </div>
-      </div>
-
-      {/* Mobile Explanation - Above results on mobile/tablet */}
-      <div className="lg:hidden container mx-auto px-4 pb-6">
-        <BenchmarkExplanation />
       </div>
 
       {/* Main Content - Side by Side Layout */}
       <div className="container mx-auto px-4 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
-          {/* Left Sidebar - Explanation (Desktop only) */}
-          <div className="hidden lg:flex lg:w-[400px]">
-            <ExplanationSidebar />
+          {/* Sidebar - Explanation (Shows above content on mobile, left side on desktop) */}
+          <div className="w-full lg:w-[400px] lg:flex">
+            <ExplanationSidebar 
+              activeTab={activeTab}
+              modelData={modelData}
+              metadata={metadata}
+            />
           </div>
           
           {/* Right Panel - Results */}

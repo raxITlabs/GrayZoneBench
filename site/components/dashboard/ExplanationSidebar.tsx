@@ -7,15 +7,27 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { DynamicReadingGuide } from '@/components/dashboard/DynamicReadingGuide';
+import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 
-export function ExplanationSidebar() {
+interface ExplanationSidebarProps {
+  activeTab?: 'graph' | 'table';
+  modelData?: Record<string, ModelData>;
+  metadata?: BenchmarkMetadata | null;
+}
+
+export function ExplanationSidebar({
+  activeTab = 'graph',
+  modelData = {},
+  metadata = null
+}: ExplanationSidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="h-full flex flex-col space-y-4">
+    <div className="flex flex-col space-y-4 h-full">
       {/* Core concept */}
-      <Card className="p-4">
-        <h2 className="text-xl font-semibold mb-3">GrayZoneBench</h2>
+      <Card className="p-4 lg:p-4">
+        {/* <h2 className="text-xl font-semibold mb-3">GrayZoneBench</h2> */}
         <p className="text-base text-muted-foreground mb-4 leading-relaxed">
           Evaluating AI safety in the &ldquo;gray zone&rdquo; between helpful and harmful responses using OpenAI&apos;s safe-completion paradigm.
         </p>
@@ -86,28 +98,12 @@ export function ExplanationSidebar() {
         </div>
       </Card>
 
-      {/* Quick interpretation guide */}
-      <Card className="p-4 flex-1">
-        <h3 className="text-base font-medium mb-3">Reading the Chart</h3>
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="space-y-1">
-            <div className="text-muted-foreground">Top-left:</div>
-            <div>Over-cautious</div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-muted-foreground">Top-right:</div>
-            <div className="text-green-600 font-medium">Ideal Zone</div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-muted-foreground">Bottom-left:</div>
-            <div className="text-red-600">Poor Performance</div>
-          </div>
-          <div className="space-y-1">
-            <div className="text-muted-foreground">Bottom-right:</div>
-            <div className="text-yellow-600">Risky but Helpful</div>
-          </div>
-        </div>
-      </Card>
+      {/* Dynamic interpretation guide */}
+      <DynamicReadingGuide 
+        activeTab={activeTab}
+        modelData={modelData}
+        metadata={metadata}
+      />
     </div>
   );
 }

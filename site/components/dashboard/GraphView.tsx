@@ -4,7 +4,7 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ResponsiveScatterPlot } from '@nivo/scatterplot';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { prepareScatterData, prepareProviderScatterData } from '@/libs/data-transforms';
@@ -22,6 +22,17 @@ export function GraphView({
   groupByProvider,
   selectedProviders
 }: GraphViewProps) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Prepare scatter plot data
   const scatterData = useMemo(() => {
@@ -133,18 +144,20 @@ export function GraphView({
   };
 
   return (
-    <div className="h-[550px] p-4 relative">
+    <div className="h-[400px] md:h-[550px] p-2 md:p-4 relative">
       {/* Quadrant background labels */}
-      <div className="absolute inset-4 pointer-events-none">
-        <div className="absolute top-3 left-3 text-sm font-medium text-muted-foreground/60">Over-cautious</div>
-        <div className="absolute top-3 right-3 text-sm font-medium text-muted-foreground/60">Ideal Zone</div>
-        <div className="absolute bottom-3 left-3 text-sm font-medium text-muted-foreground/60">Poor Performance</div>
-        <div className="absolute bottom-3 right-3 text-sm font-medium text-muted-foreground/60">Risky but Helpful</div>
+      <div className="absolute inset-2 md:inset-4 pointer-events-none">
+        <div className="absolute top-3 left-3 text-xs md:text-sm font-medium text-muted-foreground/60 hidden md:block">Over-cautious</div>
+        <div className="absolute top-3 right-3 text-xs md:text-sm font-medium text-muted-foreground/60 hidden md:block">Ideal Zone</div>
+        <div className="absolute bottom-3 left-3 text-xs md:text-sm font-medium text-muted-foreground/60 hidden md:block">Poor Performance</div>
+        <div className="absolute bottom-3 right-3 text-xs md:text-sm font-medium text-muted-foreground/60 hidden md:block">Risky but Helpful</div>
       </div>
       
       <ResponsiveScatterPlot
         data={scatterData}
-        margin={{ top: 60, right: 140, bottom: 70, left: 70 }}
+        margin={isMobile 
+          ? { top: 40, right: 20, bottom: 60, left: 60 }
+          : { top: 60, right: 140, bottom: 70, left: 70 }}
         xScale={{ type: 'linear', min: 0, max: 1 }}
         yScale={{ type: 'linear', min: 0, max: 1 }}
         blendMode="normal"
@@ -194,8 +207,8 @@ export function GraphView({
         gridXValues={[0, 0.2, 0.4, 0.6, 0.8, 1.0]}
         gridYValues={[0, 0.2, 0.4, 0.6, 0.8, 1.0]}
         
-        // Legend
-        legends={[
+        // Legend - hide on mobile for space
+        legends={!isMobile ? [
           {
             anchor: 'right',
             direction: 'column',
@@ -209,7 +222,7 @@ export function GraphView({
             symbolSize: 12,
             symbolShape: 'circle'
           }
-        ]}
+        ] : []}
         
         // Interactivity - remove useMesh to fix tooltip positioning
         isInteractive={true}
