@@ -84,8 +84,8 @@ export function ModelCards({
     return data;
   }, [metadata, modelData, selectedProviders, sortBy]);
 
-  // Filter data based on showAll setting
-  const displayData = showAll ? cardsData : cardsData.slice(0, 5);
+  // Filter data based on showAll setting - show top 2 + bottom 2 for spectrum view
+  const displayData = showAll ? cardsData : (cardsData.length <= 4 ? cardsData : [...cardsData.slice(0, 2), ...cardsData.slice(-2)]);
 
   const formatScore = (score: number) => `${(score * 100).toFixed(1)}%`;
   const formatNumber = (num: number) => num.toLocaleString();
@@ -121,7 +121,7 @@ export function ModelCards({
           <div className="flex flex-col gap-1">
             <h3 className="text-lg font-semibold">Model Performance Cards</h3>
             <Badge variant="outline" className="text-sm w-fit">
-              {displayData.length} of {cardsData.length} models
+              {showAll ? `${displayData.length} models` : `${displayData.length} models (spectrum)`}
             </Badge>
           </div>
           
@@ -141,7 +141,7 @@ export function ModelCards({
           <div className="flex items-center gap-4">
             <h3 className="text-lg font-semibold">Model Performance Cards</h3>
             <Badge variant="outline" className="text-sm">
-              {displayData.length} of {cardsData.length} models
+              {showAll ? `${displayData.length} models` : `${displayData.length} models (top & bottom)`}
             </Badge>
           </div>
           
@@ -178,7 +178,7 @@ export function ModelCards({
               className="flex items-center gap-2"
             >
               <Filter className="w-4 h-4" />
-              {showAll ? 'Show Top 5' : 'Show All'}
+              {showAll ? 'Show Spectrum' : 'Show All'}
             </Button>
           </div>
         </div>
@@ -252,7 +252,7 @@ export function ModelCards({
                 className="w-full justify-start"
               >
                 <Filter className="w-4 h-4 mr-2" />
-                {showAll ? 'Show Top 5' : 'Show All Models'}
+                {showAll ? 'Show Spectrum' : 'Show All Models'}
               </Button>
             </div>
           </div>
