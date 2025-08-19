@@ -37,26 +37,20 @@ def upload_results(
     progress_callback=None
 ) -> Dict[str, Any]:
     """
-    Upload benchmark results to Google Cloud Storage.
+    Upload benchmark results to Google Cloud Storage with model-specific files.
     
-    Automatically uploads if GCS_SERVICE_ACCOUNT and GCS_BUCKET_NAME are configured.
-    Otherwise, returns silently without error.
+    Creates separate files for each model to solve the 1MB limit issue:
+    - latest/metadata.json (~5KB) - Basic info and model stats
+    - latest/models/{model}.json (~200KB each) - Complete results per model
     
     Args:
-        local_root: Root directory containing model output folders
-        results_file: Path to the aggregated results JSON file  
-        results_data: The results data dictionary
+        local_root: Root directory containing model output folders (not used anymore)
+        results_file: Path to the aggregated results JSON file (not used anymore)
+        results_data: The results data list from the benchmark
         progress_callback: Optional callback function for progress updates
         
     Returns:
-        Dictionary with upload status and details:
-        - success: bool indicating if upload succeeded
-        - configured: bool indicating if GCS is configured
-        - files_uploaded: number of files uploaded
-        - bucket_name: name of the GCS bucket
-        - base_path: path in GCS where files were uploaded
-        - console_url: URL to view in GCS console
-        - error: error message if failed
+        Dictionary with upload status and details
     """
     # Check if GCS is configured
     service_account_env = os.getenv("GCS_SERVICE_ACCOUNT")
@@ -93,66 +87,166 @@ def upload_results(
         client = storage.Client(credentials=credentials, project=service_account_info.get('project_id'))
         bucket = client.bucket(bucket_name)
         
-        # Generate timestamp-based path
+        # Group results by model
+        if progress_callback:
+            progress_callback(f"Organizing {len(results_data)} results by model...")
+        
+        models_data = {}
+        models_updated = set()
+        
+        for result in results_data:
+            model = result["model"]
+            models_updated.add(model)
+            
+            if model not in models_data:
+                models_data[model] = {}
+            
+            # Store result by prompt ID with timestamp
+            prompt_id = str(result["hf_index"])
+            result_with_timestamp = result.copy()
+            result_with_timestamp["timestamp"] = datetime.now(timezone.utc).isoformat()
+            models_data[model][prompt_id] = result_with_timestamp
+        
+        # Download existing model data and merge
+        if progress_callback:
+            progress_callback("Downloading existing model data for merge...")
+        
+        for model in models_updated:
+            try:
+                existing_blob = bucket.blob(f"latest/models/{model}.json")
+                if existing_blob.exists():
+                    existing_json = existing_blob.download_as_text()
+                    existing_model_data = json.loads(existing_json)
+                    existing_results = existing_model_data.get("results", {})
+                    
+                    # Merge existing with new results
+                    existing_results.update(models_data[model])
+                    models_data[model] = existing_results
+                    logger.debug(f"Merged existing data for model {model}")
+            except Exception as e:
+                logger.debug(f"No existing data for model {model}: {e}")
+        
+        # Calculate statistics for each model
+        all_models_info = {}
+        upload_count = 0
+        
+        # Upload individual model files
+        if progress_callback:
+            progress_callback("Uploading model-specific files...")
+        
+        for model, results in models_data.items():
+            # Calculate model statistics
+            model_results = list(results.values())
+            safety_scores = [r.get("detailed_safety_score", 0) for r in model_results if r.get("detailed_safety_score") is not None]
+            helpfulness_scores = [r.get("detailed_helpfulness_score", 0) for r in model_results if r.get("detailed_helpfulness_score") is not None]
+            safe_count = len([r for r in model_results if r.get("safety") == "SAFE"])
+            unsafe_count = len([r for r in model_results if r.get("safety") == "UNSAFE"])
+            total_tokens = sum([r.get("input_tokens", 0) + r.get("output_tokens", 0) for r in model_results])
+            
+            model_stats = {
+                "total_prompts": len(model_results),
+                "avg_safety": sum(safety_scores) / len(safety_scores) if safety_scores else 0,
+                "avg_helpfulness": sum(helpfulness_scores) / len(helpfulness_scores) if helpfulness_scores else 0,
+                "safe_count": safe_count,
+                "unsafe_count": unsafe_count,
+                "total_tokens": total_tokens,
+                "last_updated": datetime.now(timezone.utc).isoformat()
+            }
+            
+            # Create model file structure
+            # Extract provider from first result if available
+            provider = None
+            if model_results and len(model_results) > 0:
+                provider = model_results[0].get("provider")
+            
+            model_file_data = {
+                "model": model,
+                "provider": provider,
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "stats": model_stats,
+                "results": results
+            }
+            
+            # Upload model file
+            model_json = json.dumps(model_file_data, indent=2, ensure_ascii=False, cls=ScoreBreakdownEncoder)
+            model_blob = bucket.blob(f"latest/models/{model}.json")
+            model_blob.upload_from_string(
+                model_json,
+                content_type='application/json'
+            )
+            
+            # Estimate file size for metadata
+            file_size_kb = len(model_json.encode('utf-8')) / 1024
+            all_models_info[model] = {
+                **model_stats,
+                "provider": provider,
+                "file_size_kb": round(file_size_kb, 1)
+            }
+            
+            upload_count += 1
+            logger.info(f"Uploaded model data for {model} ({file_size_kb:.1f}KB)")
+        
+        # Download existing metadata to merge with current run data
+        if progress_callback:
+            progress_callback("Downloading existing metadata for merge...")
+        
+        existing_metadata = {}
+        try:
+            metadata_blob = bucket.blob("latest/metadata.json")
+            if metadata_blob.exists():
+                existing_metadata = json.loads(metadata_blob.download_as_text())
+                logger.debug("Downloaded existing metadata for merge")
+        except Exception as e:
+            logger.debug(f"No existing metadata to merge: {e}")
+        
+        # Merge existing models_info with new models_info
+        # New models override existing ones (to get latest stats)
+        existing_models_info = existing_metadata.get("models_info", {})
+        existing_models_info.update(all_models_info)
+        
+        # Accumulate all models tested (existing + new)
+        all_models_tested = set(existing_metadata.get("models_tested", []))
+        all_models_tested.update(models_updated)
+        
+        # Create lightweight metadata file
+        if progress_callback:
+            progress_callback("Creating accumulated metadata file...")
+        
+        total_prompts = max([len(results) for results in models_data.values()]) if models_data else 0
+        
+        metadata = {
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "models_tested": sorted(list(all_models_tested)),  # ALL models ever tested
+            "total_prompts": total_prompts,
+            "last_run_models": sorted(list(models_updated)),  # Current run models only
+            "models_info": existing_models_info  # Accumulated model info
+        }
+        
+        # Upload metadata
+        metadata_json = json.dumps(metadata, indent=2, ensure_ascii=False, cls=ScoreBreakdownEncoder)
+        metadata_blob = bucket.blob("latest/metadata.json")
+        metadata_blob.upload_from_string(
+            metadata_json,
+            content_type='application/json'
+        )
+        upload_count += 1
+        
+        metadata_size_kb = len(metadata_json.encode('utf-8')) / 1024
+        logger.info(f"Uploaded metadata ({metadata_size_kb:.1f}KB)")
+        
+        # Save timestamped backup
         timestamp = datetime.now(timezone.utc).isoformat(timespec='seconds').replace(':', '-')
-        base_path = f"runs/{timestamp}"
+        backup_blob = bucket.blob(f"runs/{timestamp}/metadata.json")
+        backup_blob.upload_from_string(metadata_json, content_type='application/json')
         
-        # Upload main results file
-        if progress_callback:
-            progress_callback(f"Uploading results.json...")
-        results_blob = bucket.blob(f"{base_path}/results.json")
-        results_json = json.dumps(results_data, indent=2, ensure_ascii=False, cls=ScoreBreakdownEncoder)
-        results_blob.upload_from_string(
-            results_json,
-            content_type='application/json'
-        )
-        logger.info(f"Uploaded results to gs://{bucket_name}/{base_path}/results.json")
-        
-        # Upload individual model output files
-        upload_count = 1  # Already uploaded results.json
-        for model_dir in local_root.iterdir():
-            if model_dir.is_dir() and not model_dir.name.startswith('.'):
-                model_name = model_dir.name
-                if progress_callback:
-                    progress_callback(f"Uploading {model_name} files...")
-                
-                # Upload all JSON files in model directory
-                for json_file in model_dir.glob("*.json"):
-                    blob_path = f"{base_path}/models/{model_name}/{json_file.name}"
-                    blob = bucket.blob(blob_path)
-                    blob.upload_from_filename(
-                        str(json_file),
-                        content_type='application/json'
-                    )
-                    upload_count += 1
-                    logger.debug(f"Uploaded {json_file.name} to {blob_path}")
-                
-                # Upload markdown files if they exist
-                for md_file in model_dir.glob("*.md"):
-                    blob_path = f"{base_path}/models/{model_name}/{md_file.name}"
-                    blob = bucket.blob(blob_path)
-                    blob.upload_from_filename(
-                        str(md_file),
-                        content_type='text/markdown'
-                    )
-                    upload_count += 1
-                    logger.debug(f"Uploaded {md_file.name} to {blob_path}")
-        
-        # Update "latest" pointer for easy access
-        if progress_callback:
-            progress_callback(f"Finalizing upload...")
-        latest_blob = bucket.blob("latest/results.json")
-        latest_blob.upload_from_string(
-            results_json,  # Already encoded with ScoreBreakdownEncoder above
-            content_type='application/json'
-        )
-        logger.info(f"Updated latest results at gs://{bucket_name}/latest/results.json")
-        
-        # Create or update index file
+        # Update index
         update_index(bucket, timestamp, results_data)
         
-        console_url = f"https://console.cloud.google.com/storage/browser/{bucket_name}/{base_path}"
-        print(f"\n✓ Uploaded {upload_count} files to GCS bucket: {bucket_name}")
+        console_url = f"https://console.cloud.google.com/storage/browser/{bucket_name}/latest"
+        print(f"\n✓ Uploaded model-specific files to GCS bucket: {bucket_name}")
+        print(f"  Models updated this run: {', '.join(sorted(models_updated))}")
+        print(f"  Total models tracked: {len(all_models_tested)} ({', '.join(sorted(all_models_tested))})")
+        print(f"  Files uploaded: {upload_count} ({metadata_size_kb:.1f}KB metadata + {len(models_updated)} model files)")
         print(f"  View at: {console_url}")
         
         return {
@@ -160,8 +254,13 @@ def upload_results(
             'configured': True,
             'files_uploaded': upload_count,
             'bucket_name': bucket_name,
-            'base_path': base_path,
-            'console_url': console_url
+            'base_path': 'latest',
+            'console_url': console_url,
+            'models_updated': list(models_updated),
+            'total_models_tracked': len(all_models_tested),
+            'all_models_tracked': sorted(list(all_models_tested)),
+            'total_prompts': total_prompts,
+            'metadata_size_kb': metadata_size_kb
         }
         
     except ImportError:
