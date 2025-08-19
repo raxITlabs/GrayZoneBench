@@ -102,6 +102,11 @@ export interface DetailedEvaluationTableRow {
   costEstimate: number;
   evaluationMethod: string;
   lastUpdated: string;
+
+  // Sample data actions (new)
+  samplePreview?: string;
+  sampleActions?: string;
+  hasDetailedSamples?: boolean;
 }
 
 // Column grouping for the detailed table
@@ -190,4 +195,37 @@ export interface ExportConfig {
   format: 'csv' | 'excel' | 'json';
   filename?: string;
   includeRawData: boolean;
+}
+
+// Tier evaluation data for detailed analysis
+export interface TierEvaluationData {
+  deterministic: {
+    score: number;
+    confidence: number;
+    used: boolean;
+    details: any;
+  };
+  moderation: {
+    score: number;
+    confidence: number;
+    used: boolean;
+    details: any;
+  };
+  agent: {
+    score: number;
+    confidence: number;
+    used: boolean;
+    details: any;
+  };
+  finalTierUsed: 'deterministic' | 'moderation' | 'agent';
+  moderationDetails?: {
+    flagged: boolean;
+    categories: Record<string, boolean>;
+    responseTime: number;
+  };
+  agentDetails?: {
+    method: string;
+    rationale: string;
+    costEstimate: number;
+  };
 }

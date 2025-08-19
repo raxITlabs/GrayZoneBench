@@ -27,7 +27,11 @@ import {
   Filter,
   CheckCircle,
   XCircle,
-  Copy
+  Copy,
+  ExternalLink,
+  MessageSquare,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Pagination, usePagination, shouldShowPagination } from '@/components/ui/pagination';
@@ -41,13 +45,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
-import type { DetailedEvaluationTableRow, ColumnGroup } from '@/types/comprehensive-evaluation';
+import type { DetailedEvaluationTableRow, ColumnGroup, SampleEvaluation } from '@/types/comprehensive-evaluation';
 import { 
   prepareDetailedTableData, 
   getColumnGroups, 
-  getTableColumnConfig 
+  getTableColumnConfig,
+  extractAllSampleEvaluations
 } from '@/libs/comprehensive-data-transforms';
-import { getResponseModeBadgeProps } from '@/lib/utils';
+import { getResponseModeBadgeProps, getScoreColorClass, formatScore, formatNumber } from '@/lib/utils';
+import { SampleDetailsModal } from '@/components/evaluation/SampleDetailsModal';
+import { RationaleFormatter } from '@/components/evaluation/RationaleFormatter';
 
 interface DetailedEvaluationTableProps {
   metadata: BenchmarkMetadata | null;
@@ -67,11 +74,15 @@ export function DetailedEvaluationTable({
   const [sortField, setSortField] = useState<SortField>('effectiveness');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [markdownCopied, setMarkdownCopied] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const isMobile = useIsMobile();
   const [visibleGroups, setVisibleGroups] = useState<Record<string, boolean>>({
     core: true,
     confidence: true,
     tiers: true,
+    samples: true,
     response: false,
     harm: false,
     technical: false
@@ -103,6 +114,11 @@ export function DetailedEvaluationTable({
     data.sort((a, b) => {
       let aVal = a[sortField];
       let bVal = b[sortField];
+      
+      // Handle null/undefined values
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
       
       // Handle string sorting
       if (typeof aVal === 'string' && typeof bVal === 'string') {
@@ -149,17 +165,90 @@ export function DetailedEvaluationTable({
     }));
   };
 
+  const toggleRowExpansion = (modelName: string) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(modelName)) {
+        newSet.delete(modelName);
+      } else {
+        newSet.add(modelName);
+      }
+      return newSet;
+    });
+  };
+
+  const openSampleModal = (modelName: string) => {
+    setSelectedModel(modelName);
+    setModalOpen(true);
+  };
+
+  const getSamplePreview = (modelName: string): string => {
+    const modelSamples = modelData[modelName];
+    if (!modelSamples?.results) return '';
+    
+    const firstSample = Object.values(modelSamples.results)[0];
+    
+    // Try multiple paths to find the prompt
+    let prompt = '';
+    const agentRaw = firstSample?.safety_tier_results?.agent?.raw;
+    
+    if (agentRaw?.prompt) {
+      prompt = agentRaw.prompt;
+    } else if (agentRaw?.consensus_result?.prompt) {
+      prompt = agentRaw.consensus_result.prompt;
+    } else if ((firstSample as any)?.prompt) {
+      prompt = (firstSample as any).prompt;
+    }
+    
+    if (!prompt) return 'No prompt data available';
+    
+    // Security masking for dangerous prompts - check response mode
+    const responseMode = agentRaw?.consensus_result?.gray_zone_result?.response_mode ||
+                        agentRaw?.gray_zone_navigation?.response_mode ||
+                        firstSample?.safety_tier_results?.deterministic?.response_mode ||
+                        'unknown';
+    
+    if (responseMode === 'direct-answer') {
+      return '**** Content hidden for security ****';
+    }
+    
+    return prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '');
+  };
+
+  const getSampleEvaluations = (modelName: string): SampleEvaluation[] => {
+    if (!modelData[modelName]) return [];
+    return extractAllSampleEvaluations(modelData[modelName]);
+  };
+
+  // Helper function to get exportable columns (exclude UI-only columns)
+  const getExportableColumns = () => {
+    return visibleColumns.filter(col => 
+      !['sampleActions', 'samplePreview'].includes(col.id) // Exclude UI-only columns
+    );
+  };
+
+  // Helper function to sanitize data for export (mask dangerous content)
+  const sanitizeDataForExport = (row: DetailedEvaluationTableRow, columnId: string, value: any) => {
+    // Currently no sanitization needed for exported columns
+    // (samplePreview with security concerns is excluded from exports)
+    return value;
+  };
+
   const handleExportCSV = () => {
-    const headers = visibleColumns.map(col => col.label);
+    const exportColumns = getExportableColumns();
+    const headers = exportColumns.map(col => col.label);
     const csvContent = [
       headers.join(','),
       // Use all data, not just current page
       ...allTableData.map(row => 
-        visibleColumns.map(col => {
-          const value = row[col.id];
+        exportColumns.map(col => {
+          let value = row[col.id];
+          // Apply security sanitization
+          value = sanitizeDataForExport(row, col.id, value);
+          
           if (typeof value === 'boolean') return value ? 'Yes' : 'No';
           if (typeof value === 'number') {
-            if (col.type === 'percentage') return (value * 100).toFixed(1) + '%';
+            if (col.type === 'percentage') return formatScore(value as number);
             return value.toString();
           }
           return value?.toString() || '';
@@ -178,8 +267,65 @@ export function DetailedEvaluationTable({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadRawData = () => {
+    // Create sanitized version of modelData with security masking
+    const sanitizedData: any = {};
+    
+    Object.entries(modelData).forEach(([modelName, data]) => {
+      sanitizedData[modelName] = {
+        ...data,
+        results: Object.fromEntries(
+          Object.entries(data.results || {}).map(([key, result]) => {
+            // Apply security masking to prompts/responses for direct-answer cases
+            const agentRaw = (result as any)?.safety_tier_results?.agent?.raw;
+            const responseMode = agentRaw?.consensus_result?.gray_zone_result?.response_mode ||
+                               agentRaw?.gray_zone_navigation?.response_mode ||
+                               (result as any)?.safety_tier_results?.deterministic?.response_mode ||
+                               'unknown';
+            
+            let sanitizedResult = { ...result };
+            
+            if (responseMode === 'direct-answer' && agentRaw) {
+              // Create a deep copy and mask sensitive data
+              sanitizedResult = JSON.parse(JSON.stringify(result));
+              if (sanitizedResult.safety_tier_results?.agent?.raw) {
+                sanitizedResult.safety_tier_results.agent.raw.prompt = '**** Content hidden for security ****';
+                sanitizedResult.safety_tier_results.agent.raw.response = '**** Content hidden for security ****';
+              }
+            }
+            
+            return [key, sanitizedResult];
+          })
+        )
+      };
+    });
+
+    // Create download object with metadata
+    const downloadData = {
+      metadata: {
+        exported_at: new Date().toISOString(),
+        models_count: Object.keys(modelData).length,
+        note: 'Raw evaluation data with security masking applied for direct-answer responses'
+      },
+      models: sanitizedData
+    };
+
+    // Create and download file
+    const jsonContent = JSON.stringify(downloadData, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'grayzonebench-raw-data.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleCopyMarkdown = async () => {
-    const headers = visibleColumns.map(col => col.label);
+    const exportColumns = getExportableColumns();
+    const headers = exportColumns.map(col => col.label);
     const separator = headers.map(() => '---').join('|');
     
     const markdownContent = [
@@ -187,16 +333,19 @@ export function DetailedEvaluationTable({
       `|${separator}|`,
       // Use all data, not just current page
       ...allTableData.map(row => 
-        `| ${visibleColumns.map(col => {
-          const value = row[col.id];
+        `| ${exportColumns.map(col => {
+          let value = row[col.id];
+          // Apply security sanitization
+          value = sanitizeDataForExport(row, col.id, value);
+          
           if (col.id === 'responseMode') {
             const badgeProps = getResponseModeBadgeProps(value as string);
             return badgeProps.formattedMode;
           }
           if (typeof value === 'boolean') return value ? 'Yes' : 'No';
           if (typeof value === 'number') {
-            if (col.type === 'percentage') return (value * 100).toFixed(1) + '%';
-            return value.toLocaleString();
+            if (col.type === 'percentage') return formatScore(value as number);
+            return formatNumber(value as number);
           }
           return value?.toString() || '';
         }).join(' | ')} |`
@@ -224,9 +373,9 @@ export function DetailedEvaluationTable({
   const formatValue = (value: any, type: string) => {
     switch (type) {
       case 'percentage':
-        return `${((value as number) * 100).toFixed(1)}%`;
+        return formatScore(value as number);
       case 'number':
-        return (value as number).toLocaleString();
+        return formatNumber(value as number);
       case 'boolean':
         return value ? <CheckCircle className="w-4 h-4 text-chart-1" /> : <XCircle className="w-4 h-4 text-muted-foreground" />;
       case 'date':
@@ -236,11 +385,6 @@ export function DetailedEvaluationTable({
     }
   };
 
-  const getScoreColorClass = (score: number, thresholds: { high: number; medium: number }) => {
-    if (score >= thresholds.high) return 'text-chart-1 font-semibold';
-    if (score >= thresholds.medium) return 'text-foreground font-medium';
-    return 'text-destructive font-semibold';
-  };
 
   const formatResponseMode = (mode: string) => {
     return mode.split('-').map(word => 
@@ -374,6 +518,21 @@ export function DetailedEvaluationTable({
               {markdownCopied ? 'Copied!' : 'Copy Markdown'}
             </Button>
           )}
+          {isMobile ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={handleDownloadRawData}>
+                  <ExternalLink className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Download Raw Data</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button variant="outline" size="sm" onClick={handleDownloadRawData}>
+              <ExternalLink className="w-4 h-4 mr-2" />
+              Download Raw Data
+            </Button>
+          )}
         </div>
       </div>
 
@@ -390,91 +549,187 @@ export function DetailedEvaluationTable({
             </TableHeader>
             <TableBody>
               {tableData.map((row) => (
-                <TableRow key={row.model} className="hover:bg-muted/50">
-                  {visibleColumns.map((column) => {
-                    const value = row[column.id];
-                    const isSticky = column.sticky;
-                    
-                    return (
-                      <TableCell 
-                        key={column.id} 
-                        className={`whitespace-nowrap ${
-                          isSticky ? 'sticky left-0 bg-background z-10 border-r' : ''
-                        } ${column.id === 'model' ? 'font-medium' : ''}`}
-                        style={{ minWidth: column.width || 100 }}
-                      >
-                        {/* Special rendering for specific columns */}
-                        {column.id === 'model' && (
-                          <div className="font-medium">{value as string}</div>
-                        )}
-                        
-                        {column.id === 'provider' && (
-                          <div className="flex items-center gap-2">
-                            <ProviderLogo provider={value as string} size={20} />
-                            <span className="text-sm font-medium">{value as string}</span>
-                          </div>
-                        )}
-                        
-                        {column.id === 'responseMode' && (() => {
-                          const badgeProps = getResponseModeBadgeProps(value as string);
-                          return (
-                            <Badge variant={badgeProps.variant} className={`text-sm ${badgeProps.className}`}>
-                              {badgeProps.formattedMode}
+                <React.Fragment key={row.model}>
+                  <TableRow className="hover:bg-muted/50">
+                    {visibleColumns.map((column) => {
+                      const value = row[column.id];
+                      const isSticky = column.sticky;
+                      
+                      return (
+                        <TableCell 
+                          key={column.id} 
+                          className={`whitespace-nowrap ${
+                            isSticky ? 'sticky left-0 bg-background z-10 border-r' : ''
+                          } ${column.id === 'model' ? 'font-medium' : ''}`}
+                          style={{ minWidth: column.width || 100 }}
+                        >
+                          {/* Special rendering for specific columns */}
+                          {column.id === 'model' && (
+                            <div className="font-medium">{value as string}</div>
+                          )}
+                          
+                          {column.id === 'provider' && (
+                            <div className="flex items-center gap-2">
+                              <ProviderLogo provider={value as string} size={20} />
+                              <span className="text-sm font-medium">{value as string}</span>
+                            </div>
+                          )}
+                          
+                          {column.id === 'responseMode' && (() => {
+                            const badgeProps = getResponseModeBadgeProps(value as string);
+                            return (
+                              <Badge variant={badgeProps.variant} className={`text-sm ${badgeProps.className}`}>
+                                {badgeProps.formattedMode}
+                              </Badge>
+                            );
+                          })()}
+                          
+                          {column.id === 'tierUsed' && (
+                            <Badge variant="outline" className="text-xs">
+                              {(value as string).charAt(0).toUpperCase() + (value as string).slice(1)}
                             </Badge>
-                          );
-                        })()}
-                        
-                        {column.id === 'tierUsed' && (
-                          <Badge variant="outline" className="text-xs">
-                            {(value as string).charAt(0).toUpperCase() + (value as string).slice(1)}
-                          </Badge>
-                        )}
-                        
-                        {column.id === 'facilitationLevel' && (
-                          <Badge 
-                            variant={value === 'negligible' ? 'secondary' : 'destructive'} 
-                            className="text-xs"
-                          >
-                            {(value as string).charAt(0).toUpperCase() + (value as string).slice(1)}
-                          </Badge>
-                        )}
-                        
-                        {column.id === 'harmLevel' && (
-                          <Badge 
-                            variant={value === 'negligible' ? 'secondary' : 'destructive'} 
-                            className="text-xs"
-                          >
-                            {(value as string).charAt(0).toUpperCase() + (value as string).slice(1)}
-                          </Badge>
-                        )}
-                        
-                        {/* Score columns with color coding */}
-                        {(['safety', 'helpfulness', 'effectiveness'].includes(column.id)) && (
-                          <span className={`font-mono ${getScoreColorClass(
-                            value as number, 
-                            column.id === 'effectiveness' ? { high: 0.5, medium: 0.3 } : { high: 0.7, medium: 0.5 }
-                          )}`}>
-                            {formatValue(value, column.type)}
-                          </span>
-                        )}
-                        
-                        {/* Confidence and quality scores */}
-                        {(['safetyConfidence', 'helpfulnessConfidence', 'navigationQuality', 'grayZoneEffectiveness'].includes(column.id)) && (
-                          <span className="font-mono text-sm">
-                            {formatValue(value, column.type)}
-                          </span>
-                        )}
-                        
-                        {/* Default rendering for other columns */}
-                        {!['model', 'provider', 'responseMode', 'tierUsed', 'facilitationLevel', 'harmLevel', 'safety', 'helpfulness', 'effectiveness', 'safetyConfidence', 'helpfulnessConfidence', 'navigationQuality', 'grayZoneEffectiveness'].includes(column.id) && (
-                          <span className={column.type === 'number' ? 'font-mono' : ''}>
-                            {formatValue(value, column.type)}
-                          </span>
-                        )}
+                          )}
+                          
+                          {column.id === 'facilitationLevel' && (
+                            <Badge 
+                              variant={value === 'negligible' ? 'secondary' : 'destructive'} 
+                              className="text-xs"
+                            >
+                              {(value as string).charAt(0).toUpperCase() + (value as string).slice(1)}
+                            </Badge>
+                          )}
+                          
+                          {column.id === 'harmLevel' && (
+                            <Badge 
+                              variant={value === 'negligible' ? 'secondary' : 'destructive'} 
+                              className="text-xs"
+                            >
+                              {(value as string).charAt(0).toUpperCase() + (value as string).slice(1)}
+                            </Badge>
+                          )}
+                          
+                          {/* Score columns with color coding */}
+                          {(['safety', 'helpfulness', 'effectiveness'].includes(column.id)) && (
+                            <span className={`font-mono ${getScoreColorClass(
+                              value as number, 
+                              column.id === 'effectiveness' ? { high: 0.5, medium: 0.3 } : { high: 0.7, medium: 0.5 }
+                            )}`}>
+                              {formatValue(value, column.type)}
+                            </span>
+                          )}
+                          
+                          {/* Confidence and quality scores */}
+                          {(['safetyConfidence', 'helpfulnessConfidence', 'navigationQuality', 'grayZoneEffectiveness'].includes(column.id)) && (
+                            <span className="font-mono text-sm">
+                              {formatValue(value, column.type)}
+                            </span>
+                          )}
+                          
+                          {/* Sample preview column */}
+                          {column.id === 'samplePreview' && (
+                            <div className="max-w-xs">
+                              <p className="text-sm text-muted-foreground truncate">
+                                {getSamplePreview(row.model)}
+                              </p>
+                            </div>
+                          )}
+                          
+                          {/* Sample actions column */}
+                          {column.id === 'sampleActions' && (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleRowExpansion(row.model)}
+                                className="h-8 w-8 p-0"
+                              >
+                                {expandedRows.has(row.model) ? (
+                                  <ChevronDown className="w-4 h-4" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openSampleModal(row.model)}
+                                className="h-8"
+                              >
+                                <MessageSquare className="w-4 h-4 mr-1" />
+                                View
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Default rendering for other columns */}
+                          {!['model', 'provider', 'responseMode', 'tierUsed', 'facilitationLevel', 'harmLevel', 'safety', 'helpfulness', 'effectiveness', 'safetyConfidence', 'helpfulnessConfidence', 'navigationQuality', 'grayZoneEffectiveness', 'samplePreview', 'sampleActions'].includes(column.id) && (
+                            <span className={column.type === 'number' ? 'font-mono' : ''}>
+                              {formatValue(value, column.type)}
+                            </span>
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                  
+                  {/* Expanded row content */}
+                  {expandedRows.has(row.model) && (
+                    <TableRow>
+                      <TableCell colSpan={visibleColumns.length} className="p-0">
+                        <div className="p-6 bg-muted/20 border-t">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Sample Rationales */}
+                            {(() => {
+                              const samples = getSampleEvaluations(row.model);
+                              const firstSample = samples[0];
+                              
+                              if (!firstSample) {
+                                return (
+                                  <div className="col-span-2 text-center text-muted-foreground py-8">
+                                    No detailed sample data available
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <>
+                                  {firstSample.safetyRationale && (
+                                    <RationaleFormatter
+                                      rationale={firstSample.safetyRationale}
+                                      type="safety"
+                                      compact
+                                    />
+                                  )}
+                                  {firstSample.helpfulnessRationale && (
+                                    <RationaleFormatter
+                                      rationale={firstSample.helpfulnessRationale}
+                                      type="helpfulness"
+                                      compact
+                                    />
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+                          
+                          <div className="mt-4 flex justify-between items-center">
+                            <div className="text-sm text-muted-foreground">
+                              Showing sample from {getSampleEvaluations(row.model).length} total evaluations
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openSampleModal(row.model)}
+                            >
+                              <ExternalLink className="w-4 h-4 mr-2" />
+                              View All Samples
+                            </Button>
+                          </div>
+                        </div>
                       </TableCell>
-                    );
-                  })}
-                </TableRow>
+                    </TableRow>
+                  )}
+                </React.Fragment>
               ))}
             </TableBody>
           </Table>
@@ -501,6 +756,16 @@ export function DetailedEvaluationTable({
           Showing {visibleColumns.length} of {columnConfig.length} available columns
         </div>
       </div>
+
+      {/* Sample Details Modal */}
+      {selectedModel && (
+        <SampleDetailsModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          modelName={selectedModel}
+          samples={getSampleEvaluations(selectedModel)}
+        />
+      )}
     </div>
   );
 }

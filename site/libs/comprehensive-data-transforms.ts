@@ -214,6 +214,7 @@ export function prepareModelCardsData(
     .sort((a, b) => b.effectiveness - a.effectiveness); // Sort by effectiveness descending
 }
 
+
 /**
  * Prepare data for detailed evaluation table
  */
@@ -291,6 +292,79 @@ export function extractSampleEvaluations(
 }
 
 /**
+ * Extract all sample evaluations for a model (not just limited samples)
+ */
+export function extractAllSampleEvaluations(
+  modelData: ModelData
+): SampleEvaluation[] {
+  const results = Object.entries(modelData.results || {});
+  
+  return results.map(([promptId, result]): SampleEvaluation => {
+    const metrics = extractComprehensiveMetrics(result);
+    
+    return {
+      promptIndex: parseInt(promptId) || 0,
+      category: metrics.category,
+      prompt: metrics.prompt,
+      response: metrics.response,
+      safetyScore: metrics.safety,
+      helpfulnessScore: metrics.helpfulness,
+      effectivenessScore: metrics.effectiveness,
+      safetyRationale: metrics.safetyRationale,
+      helpfulnessRationale: metrics.helpfulnessRationale,
+      grayZoneType: metrics.grayZoneType,
+      responseMode: metrics.responseMode,
+      tierUsed: metrics.tierUsed,
+      timestamp: metrics.timestamp
+    };
+  });
+}
+
+/**
+ * Extract tier-specific data for evaluation tier viewer
+ */
+export function extractTierData(result: SmartMergeResult) {
+  const safetyTiers = result.safety_tier_results || {};
+  const helpfulnessTiers = result.helpfulness_tier_results || {};
+  
+  const deterministicData = safetyTiers.deterministic || {};
+  const moderationData = safetyTiers.moderation || {};
+  const agentData = safetyTiers.agent || {};
+  
+  return {
+    deterministic: {
+      score: deterministicData.safety_score || 0,
+      confidence: deterministicData.confidence || 0,
+      used: true, // Always used as first tier
+      details: deterministicData
+    },
+    moderation: {
+      score: moderationData.flagged ? 0 : 1,
+      confidence: 1, // Moderation is binary
+      used: !!moderationData.flagged !== undefined,
+      details: moderationData
+    },
+    agent: {
+      score: agentData.safety_score || 0,
+      confidence: agentData.confidence || 0,
+      used: !!agentData.safety_score,
+      details: agentData
+    },
+    finalTierUsed: determineTierUsed(safetyTiers),
+    moderationDetails: moderationData.flagged !== undefined ? {
+      flagged: moderationData.flagged,
+      categories: moderationData.categories || {},
+      responseTime: moderationData.response_time || 0
+    } : undefined,
+    agentDetails: agentData.raw ? {
+      method: agentData.method || 'unknown',
+      rationale: agentData.rationale || '',
+      costEstimate: agentData.raw.cost_estimate || 0
+    } : undefined
+  };
+}
+
+/**
  * Get column groups configuration for detailed table
  */
 export function getColumnGroups(): ColumnGroup[] {
@@ -317,12 +391,18 @@ export function getColumnGroups(): ColumnGroup[] {
       id: 'response',
       label: 'Response Analysis',
       columns: ['responseMode', 'responseModeConfidence', 'refusalConfidence', 'alternativesProvided', 'educationProvided', 'explanationProvided'],
-      visible: true
+      visible: false
     },
     {
       id: 'harm',
       label: 'Harm Assessment',
       columns: ['meaningfulFacilitation', 'facilitationLevel', 'harmLevel', 'actionabilityScore'],
+      visible: false
+    },
+    {
+      id: 'samples',
+      label: 'Sample Data',
+      columns: ['samplePreview', 'sampleActions'],
       visible: true
     },
     {
@@ -371,6 +451,10 @@ export function getTableColumnConfig(): TableColumnConfig[] {
     { id: 'facilitationLevel', label: 'Facilitation Level', type: 'string', sortable: true, groupId: 'harm' },
     { id: 'harmLevel', label: 'Harm Level', type: 'string', sortable: true, groupId: 'harm' },
     { id: 'actionabilityScore', label: 'Actionability', type: 'percentage', sortable: true, groupId: 'harm' },
+    
+    // Sample data
+    { id: 'samplePreview', label: 'Sample Preview', type: 'string', sortable: false, groupId: 'samples' },
+    { id: 'sampleActions', label: 'Actions', type: 'string', sortable: false, groupId: 'samples' },
     
     // Technical details
     { id: 'totalPrompts', label: 'Prompts', type: 'number', sortable: true, groupId: 'technical' },

@@ -37,7 +37,7 @@ export default function DashboardPage() {
   
   // View settings
   const [activeTab, setActiveTab] = useState<'graph' | 'table'>('graph');
-  const [groupByProvider, setGroupByProvider] = useState(true);
+  const [groupByProvider, setGroupByProvider] = useState(false);
   const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
   const [availableProviders, setAvailableProviders] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);

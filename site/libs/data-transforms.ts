@@ -47,13 +47,7 @@ export interface BenchmarkTableRow {
   evaluations: number;
 }
 
-// Provider color mapping using monochromatic scheme based on chart-1
-const PROVIDER_COLORS = {
-  'Anthropic': 'var(--chart-1)',   // Primary color (base)
-  'OpenAI': 'var(--chart-1)',      // Will be lightened programmatically
-  'Google': 'var(--chart-1)',      // Will be darkened programmatically  
-  'Unknown': 'var(--muted)'        // Muted color for unknown
-} as const;
+// Note: Provider colors are now handled dynamically in components using getDynamicProviderColors()
 
 /**
  * Detect provider from model name
@@ -179,7 +173,7 @@ export function groupByProvider(
       avgHelpfulness,
       avgEffectiveness: avgSafety * avgHelpfulness,
       totalEvaluations: group.totalEvaluations,
-      color: PROVIDER_COLORS[provider as keyof typeof PROVIDER_COLORS] || PROVIDER_COLORS.Unknown
+      color: '' // Color will be assigned dynamically in components
     };
   }).sort((a, b) => b.avgEffectiveness - a.avgEffectiveness); // Sort by effectiveness descending
 }
@@ -221,7 +215,7 @@ export function prepareChartData(
           'Helpfulness Score': averages.avgHelpfulness,
           'Effectiveness': averages.avgEffectiveness,
           provider: provider,
-          color: PROVIDER_COLORS[provider as keyof typeof PROVIDER_COLORS] || PROVIDER_COLORS.Unknown
+          color: '' // Color will be assigned dynamically in components
         };
       })
       .sort((a, b) => b['Effectiveness'] - a['Effectiveness']); // Sort by effectiveness
@@ -275,6 +269,61 @@ export function getUniqueProvidersFromMetadata(metadata: BenchmarkMetadata): str
 }
 
 /**
+ * Extract unique providers from model data
+ */
+export function getUniqueProvidersFromModelData(modelData: Record<string, ModelData>): string[] {
+  const providers = Object.keys(modelData)
+    .map(modelName => detectProvider(modelName))
+    .filter(provider => provider && provider !== 'Unknown');
+  
+  return [...new Set(providers)].sort(); // Unique and sorted for consistency
+}
+
+/**
+ * Get dynamic color mapping for providers using CSS chart variables
+ */
+export function getDynamicProviderColors(providers: string[]): Record<string, string> {
+  const chartColors = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5'];
+  const colorMap: Record<string, string> = {};
+  
+  providers.forEach((provider, index) => {
+    const colorVar = chartColors[index % chartColors.length];
+    
+    if (typeof window !== 'undefined') {
+      // Client-side: read CSS variable
+      const style = getComputedStyle(document.documentElement);
+      const color = style.getPropertyValue(colorVar).trim();
+      
+      if (color === '') {
+        // Fallback if CSS variable is not available
+        const fallbackColors = {
+          '--chart-1': '#644a40',
+          '--chart-2': '#ffdfb5', 
+          '--chart-3': '#e8e8e8',
+          '--chart-4': '#ffe6c4',
+          '--chart-5': '#66493e'
+        };
+        colorMap[provider] = fallbackColors[colorVar as keyof typeof fallbackColors];
+      } else {
+        colorMap[provider] = color;
+      }
+    } else {
+      // Server-side: use fallback based on light mode values
+      const fallbackColors = {
+        '--chart-1': '#644a40',
+        '--chart-2': '#ffdfb5', 
+        '--chart-3': '#e8e8e8',
+        '--chart-4': '#ffe6c4',
+        '--chart-5': '#66493e'
+      };
+      colorMap[provider] = fallbackColors[colorVar as keyof typeof fallbackColors];
+    }
+  });
+  
+  return colorMap;
+}
+
+/**
  * Prepare data for scatter plot visualization
  */
 export function prepareScatterData(
@@ -290,7 +339,6 @@ export function prepareScatterData(
     .map(([modelName, data]) => {
       const averages = calculateModelAverages(data);
       const provider = detectProvider(modelName);
-      const color = getProviderColor(provider);
       
       return {
         id: modelName,
@@ -298,7 +346,7 @@ export function prepareScatterData(
         y: averages.avgHelpfulness,
         size: averages.avgEffectiveness * 100, // Scale for point size (0-100)
         provider: provider,
-        color: color,
+        color: '', // Color will be applied in component
         modelName: modelName,
         evaluations: averages.totalEvaluations,
         tokens: averages.totalTokens || 0
@@ -318,15 +366,13 @@ export function prepareProviderScatterData(
   const providerGroups = groupByProvider(modelData, selectedProviders);
   
   return providerGroups.map(provider => {
-    const color = getProviderColor(provider.provider);
-    
     return {
       id: provider.provider,
       x: provider.avgSafety,
       y: provider.avgHelpfulness,
       size: provider.avgEffectiveness * 100, // Scale for point size (0-100)
       provider: provider.provider,
-      color: color,
+      color: '', // Color will be applied in component
       modelName: `${provider.provider} (${provider.models.length} models)`,
       evaluations: provider.totalEvaluations,
       tokens: 0 // Not relevant for provider aggregation
@@ -373,29 +419,4 @@ function darkenColor(color: string, amount: number): string {
   return color;
 }
 
-/**
- * Get provider badge color for UI components using monochromatic scheme
- */
-export function getProviderColor(provider: string): string {
-  if (typeof window === 'undefined') {
-    // Server-side fallback - use light mode chart-1 base color
-    const baseColor = '#644a40'; // chart-1 light mode
-    switch (provider) {
-      case 'Anthropic': return baseColor;
-      case 'OpenAI': return lightenColor(baseColor, 0.3);
-      case 'Google': return darkenColor(baseColor, 0.2);
-      default: return lightenColor(baseColor, 0.5);
-    }
-  }
-  
-  const style = getComputedStyle(document.documentElement);
-  const baseColor = style.getPropertyValue('--chart-1').trim();
-  
-  switch (provider) {
-    case 'Anthropic': return baseColor; // Primary color
-    case 'OpenAI': return lightenColor(baseColor, 0.3); // Lighter variation
-    case 'Google': return darkenColor(baseColor, 0.2); // Darker variation
-    case 'Unknown': return style.getPropertyValue('--muted').trim(); // Use muted for unknown
-    default: return lightenColor(baseColor, 0.5); // Lightest variation for others
-  }
-}
+// Old getProviderColor function removed - now using getDynamicProviderColors() for all color assignments
