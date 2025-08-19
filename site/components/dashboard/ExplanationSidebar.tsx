@@ -28,8 +28,8 @@ export function ExplanationSidebar({
       {/* Core concept */}
       <Card className="p-4 lg:p-4">
         {/* <h2 className="text-xl font-semibold mb-3">GrayZoneBench</h2> */}
-        <p className="text-base text-muted-foreground mb-4 leading-relaxed">
-          We test how well AI models handle tricky requests that aren&apos;t clearly good or bad—using real scenarios where safety and helpfulness both matter.
+        <p className="text-base text-foreground mb-4 leading-relaxed">
+          We test how well AI models handle tricky requests that aren&apos;t clearly good or bad using real scenarios where safety and helpfulness both matter.
         </p>
         
         {/* Key metrics explanation */}
@@ -53,12 +53,12 @@ export function ExplanationSidebar({
             onClick={() => setIsExpanded(!isExpanded)}
             className="w-full justify-between p-2 h-auto"
           >
-            <span className="text-sm">Learn more about methodology</span>
+            <span className="text-sm text-foreground">Learn more about methodology</span>
             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </Button>
           
           {isExpanded && (
-            <div className="space-y-3 text-base text-muted-foreground leading-relaxed">
+            <div className="space-y-3 text-base text-foreground leading-relaxed">
               <p>
                 When OpenAI announced GPT-5, they highlighted &ldquo;safe completion&rdquo;&mdash;models assess user intent rather than bluntly refusing requests. This caught our attention in nuanced &ldquo;gray areas,&rdquo; especially with dual-use scenarios.
               </p>

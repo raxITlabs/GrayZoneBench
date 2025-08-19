@@ -27,6 +27,7 @@
     "@nivo/sunburst": "^0.99.0",
     "@nivo/treemap": "^0.99.0",
     "@nivo/waffle": "^0.99.0",
+    "@paper-design/shaders-react": "^0.0.46",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",

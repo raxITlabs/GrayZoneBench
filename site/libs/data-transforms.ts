@@ -55,7 +55,7 @@ export interface BenchmarkTableRow {
 export function detectProvider(modelName: string): string {
   const name = modelName.toLowerCase();
   
-  if (name.includes('gpt') || name.includes('o1') || name.includes('o3')) {
+  if (name.includes('gpt') || name.includes('o1') || name.includes('o3') || name.includes('o4')) {
     return 'OpenAI';
   }
   if (name.includes('claude')) {
@@ -231,28 +231,31 @@ export function prepareTableData(
   modelData: Record<string, ModelData>,
   selectedProviders: string[] = []
 ): BenchmarkTableRow[] {
-  return Object.entries(modelData)
-    .filter(([modelName]) => {
-      if (selectedProviders.length === 0) return true;
-      const provider = detectProvider(modelName);
-      return selectedProviders.includes(provider);
-    })
-    .map(([modelName, data]) => {
-      const averages = calculateModelAverages(data);
-      const provider = detectProvider(modelName);
-      
-      return {
-        model: modelName,
-        provider,
-        safety: averages.avgSafety,
-        helpfulness: averages.avgHelpfulness,
-        effectiveness: averages.avgEffectiveness,
-        responseMode: averages.responseMode,
-        tokens: averages.totalTokens || 0,
-        evaluations: averages.totalEvaluations
-      };
-    })
-    .sort((a, b) => b.effectiveness - a.effectiveness); // Sort by effectiveness descending
+  const allModels = Object.entries(modelData);
+  
+  const filteredModels = allModels.filter(([modelName]) => {
+    if (selectedProviders.length === 0) return true;
+    const provider = detectProvider(modelName);
+    return selectedProviders.includes(provider);
+  });
+  
+  const tableRows = filteredModels.map(([modelName, data]) => {
+    const averages = calculateModelAverages(data);
+    const provider = detectProvider(modelName);
+    
+    return {
+      model: modelName,
+      provider,
+      safety: averages.avgSafety,
+      helpfulness: averages.avgHelpfulness,
+      effectiveness: averages.avgEffectiveness,
+      responseMode: averages.responseMode,
+      tokens: averages.totalTokens || 0,
+      evaluations: averages.totalEvaluations
+    };
+  });
+  
+  return tableRows.sort((a, b) => b.effectiveness - a.effectiveness); // Sort by effectiveness descending
 }
 
 /**
