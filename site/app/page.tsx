@@ -26,6 +26,8 @@ import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { getUniqueProvidersFromMetadata } from '@/libs/data-transforms';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { ValueMomentBanner } from '@/components/ui/value-moment-banner';
+import { useSimplePopup } from '@/hooks/use-simple-popup';
 
 export default function DashboardPage() {
   const [metadata, setMetadata] = useState<BenchmarkMetadata | null>(null);
@@ -44,6 +46,9 @@ export default function DashboardPage() {
   
   // Check if mobile/tablet (1024px breakpoint for layout decisions)
   const isMobile = useIsMobile(1024);
+  
+  // Simple popup timer
+  const popup = useSimplePopup();
   
   useEffect(() => {
     setMounted(true);
@@ -364,7 +369,10 @@ export default function DashboardPage() {
           {/* Right Panel - Graph/Table Only */}
           <div className="flex-1">
             <Card className="relative">
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'graph' | 'table')}>
+              <Tabs 
+                value={activeTab} 
+                onValueChange={(v) => setActiveTab(v as 'graph' | 'table')}
+              >
                 {/* Tabs Header */}
                 <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
                   <TabsList className="grid w-[200px] grid-cols-2">
@@ -473,6 +481,30 @@ export default function DashboardPage() {
           </Card>
         </div>
       </main>
+
+      {/* Simple Popup Banner */}
+      <ValueMomentBanner
+        isVisible={popup.isVisible}
+        onDismiss={popup.dismissPopup}
+      />
+
+      {/* Footer */}
+      <footer className="border-t border-border mt-16">
+        <div className="container mx-auto px-4 py-6 text-center">
+          <p className="text-sm text-muted-foreground/70">
+            Brought to you by the{' '}
+            <a 
+              href="https://raxit.ai" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:text-primary/80 underline underline-offset-2"
+            >
+              raxIT AI
+            </a>{' '}
+            team
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

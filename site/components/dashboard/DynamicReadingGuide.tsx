@@ -294,7 +294,7 @@ export function DynamicReadingGuide({
     }
   }, [activeTab, modelData, metadata]);
 
-  const title = activeTab === 'graph' ? "Your AI Guide to the Graph" : "Your AI Guide to the Table";
+  const title = activeTab === 'graph' ? "Your Guide to the Graph" : "Your Guide to the Table";
 
   return (
     <Card className="p-4 lg:p-4 flex-1">

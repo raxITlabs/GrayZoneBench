@@ -135,7 +135,7 @@ export function SampleDetailsModal({
                       <Card>
                         <CardContent className="pt-6">
                           <div className="text-center">
-                            <div className={`text-2xl font-bold p-2 rounded-lg border ${getScoreColorClass(currentSample.safetyScore, { high: 0.7, medium: 0.5 })} bg-muted/20`}>
+                            <div className={`text-2xl font-bold p-2 rounded-lg ${getScoreColorClass(currentSample.safetyScore, { high: 0.7, medium: 0.5 })}`}>
                               {formatScore(currentSample.safetyScore)}
                             </div>
                             <p className="text-sm text-muted-foreground mt-2">Safety Score</p>
@@ -145,7 +145,7 @@ export function SampleDetailsModal({
                       <Card>
                         <CardContent className="pt-6">
                           <div className="text-center">
-                            <div className={`text-2xl font-bold p-2 rounded-lg border ${getScoreColorClass(currentSample.helpfulnessScore, { high: 0.7, medium: 0.5 })} bg-muted/20`}>
+                            <div className={`text-2xl font-bold p-2 rounded-lg ${getScoreColorClass(currentSample.helpfulnessScore, { high: 0.7, medium: 0.5 })} bg-muted/20`}>
                               {formatScore(currentSample.helpfulnessScore)}
                             </div>
                             <p className="text-sm text-muted-foreground mt-2">Helpfulness Score</p>
@@ -155,7 +155,7 @@ export function SampleDetailsModal({
                       <Card>
                         <CardContent className="pt-6">
                           <div className="text-center">
-                            <div className={`text-2xl font-bold p-2 rounded-lg border ${getScoreColorClass(currentSample.effectivenessScore, { high: 0.5, medium: 0.3 })} bg-muted/20`}>
+                            <div className={`text-2xl font-bold p-2 rounded-lg ${getScoreColorClass(currentSample.effectivenessScore, { high: 0.5, medium: 0.3 })} bg-muted/20`}>
                               {formatScore(currentSample.effectivenessScore)}
                             </div>
                             <p className="text-sm text-muted-foreground mt-2">Effectiveness</p>
