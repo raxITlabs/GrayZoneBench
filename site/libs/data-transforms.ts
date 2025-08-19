@@ -299,9 +299,9 @@ export function getDynamicProviderColors(providers: string[]): Record<string, st
         const fallbackColors = {
           '--chart-1': '#644a40',
           '--chart-2': '#ffdfb5', 
-          '--chart-3': '#e8e8e8',
-          '--chart-4': '#ffe6c4',
-          '--chart-5': '#66493e'
+          '--chart-3': '#828282',
+          '--chart-4': '#ffbb5c',
+          '--chart-5': '#d4947d'
         };
         colorMap[provider] = fallbackColors[colorVar as keyof typeof fallbackColors];
       } else {
@@ -312,9 +312,9 @@ export function getDynamicProviderColors(providers: string[]): Record<string, st
       const fallbackColors = {
         '--chart-1': '#644a40',
         '--chart-2': '#ffdfb5', 
-        '--chart-3': '#e8e8e8',
-        '--chart-4': '#ffe6c4',
-        '--chart-5': '#66493e'
+        '--chart-3': '#828282',
+        '--chart-4': '#ffbb5c',
+        '--chart-5': '#d4947d'
       };
       colorMap[provider] = fallbackColors[colorVar as keyof typeof fallbackColors];
     }
