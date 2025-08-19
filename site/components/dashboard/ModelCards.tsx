@@ -14,7 +14,8 @@ import {
   TrendingUp, 
   TrendingDown, 
   Shield, 
-  HelpCircle, 
+  HelpCircle,
+  HeartHandshake,
   Target,
   AlertTriangle,
   CheckCircle,
@@ -181,7 +182,9 @@ export function ModelCards({
           const cols = isMobile ? 1 : (window.innerWidth >= 1280 ? 4 : (window.innerWidth >= 1024 ? 3 : 2));
           const isRightEdge = (index + 1) % cols === 0;
           return (
-            <ModelCard key={card.model} data={card} isMobile={isMobile} isRightEdge={isRightEdge} />
+            <div key={card.model} style={{ position: 'relative', zIndex: displayData.length - index }}>
+              <ModelCard data={card} isMobile={isMobile} isRightEdge={isRightEdge} />
+            </div>
           );
         })}
       </div>
@@ -399,7 +402,7 @@ function ModelCard({ data, isMobile, isRightEdge = false }: { data: ModelCardDat
             </ExpandableCardHeader>
 
             <ExpandableCardContent>
-              {/* Core Metrics - Safety & Helpfulness */}
+              {/* Core Metrics - Safety & Helpfulness - Always Visible */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-1 mb-1">
@@ -413,7 +416,7 @@ function ModelCard({ data, isMobile, isRightEdge = false }: { data: ModelCardDat
                 
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-1 mb-1">
-                    <HelpCircle className="w-4 h-4 text-muted-foreground" />
+                    <HeartHandshake className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm font-medium">Helpfulness</span>
                   </div>
                   <div className={`text-xl font-bold font-mono ${getScoreColorClass(data.helpfulness, { high: 0.7, medium: 0.5 })}`}>
@@ -422,7 +425,7 @@ function ModelCard({ data, isMobile, isRightEdge = false }: { data: ModelCardDat
                 </div>
               </div>
 
-              {/* Response Mode */}
+              {/* Response Mode - Always Visible */}
               <div className="mb-4">
                 {(() => {
                   const badgeProps = getResponseModeBadgeProps(data.responseMode);
