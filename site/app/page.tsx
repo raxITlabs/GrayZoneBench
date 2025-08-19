@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import { GraphView } from '@/components/dashboard/GraphView';
 import { TableView } from '@/components/dashboard/TableView';
 import { ModelCards } from '@/components/dashboard/ModelCards';
@@ -48,49 +49,50 @@ export default function DashboardPage() {
     setMounted(true);
   }, []);
 
+  // Fetch data function
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch metadata
+      const metaResponse = await fetch('/api/metadata');
+      if (!metaResponse.ok) throw new Error('Failed to fetch metadata');
+      const meta = await metaResponse.json();
+      setMetadata(meta);
+      
+      // Extract unique providers from metadata
+      const providers = getUniqueProvidersFromMetadata(meta);
+      setAvailableProviders(providers);
+      
+      // Set all providers as selected by default
+      setSelectedProviders(providers);
+      
+      // Fetch model data for each model
+      const modelPromises = meta.models_tested.map(async (model: string) => {
+        const response = await fetch(`/api/model?model=${encodeURIComponent(model)}`);
+        if (!response.ok) return null;
+        return { model, data: await response.json() };
+      });
+      
+      const results = await Promise.all(modelPromises);
+      const dataMap: Record<string, ModelData> = {};
+      
+      results.forEach(result => {
+        if (result && result.data) {
+          dataMap[result.model] = result.data;
+        }
+      });
+      
+      setModelData(dataMap);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch data on mount
   useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        
-        // Fetch metadata
-        const metaResponse = await fetch('/api/metadata');
-        if (!metaResponse.ok) throw new Error('Failed to fetch metadata');
-        const meta = await metaResponse.json();
-        setMetadata(meta);
-        
-        // Extract unique providers from metadata
-        const providers = getUniqueProvidersFromMetadata(meta);
-        setAvailableProviders(providers);
-        
-        // Set all providers as selected by default
-        setSelectedProviders(providers);
-        
-        // Fetch model data for each model
-        const modelPromises = meta.models_tested.map(async (model: string) => {
-          const response = await fetch(`/api/model?model=${encodeURIComponent(model)}`);
-          if (!response.ok) return null;
-          return { model, data: await response.json() };
-        });
-        
-        const results = await Promise.all(modelPromises);
-        const dataMap: Record<string, ModelData> = {};
-        
-        results.forEach(result => {
-          if (result && result.data) {
-            dataMap[result.model] = result.data;
-          }
-        });
-        
-        setModelData(dataMap);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    }
-    
     fetchData();
   }, []);
 
@@ -336,7 +338,13 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
-          <SwitchButton />
+          <div className="flex flex-row items-center gap-2 sm:gap-3">
+            <RefreshButton 
+              size="default" 
+              onRefresh={fetchData}
+            />
+            <SwitchButton size="default" />
+          </div>
         </div>
       </header>
 

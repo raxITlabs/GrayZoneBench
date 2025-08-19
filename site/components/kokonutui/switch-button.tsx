@@ -55,8 +55,8 @@ export default function SwitchButton({
 
     const sizes = {
         sm: "h-8 px-3 text-sm",
-        default: "h-10 px-4",
-        lg: "h-11 px-5",
+        default: "h-10 px-3 sm:px-4", // More compact on mobile, normal on desktop
+        lg: "h-11 px-4 sm:px-5",
     };
 
     return (
@@ -88,10 +88,10 @@ export default function SwitchButton({
                         "group-hover:rotate-[360deg] group-hover:scale-110",
                         theme === "dark" ? "rotate-180" : "rotate-0",
                         "transform-gpu",
-                        "drop-shadow-[0_0_12px_rgba(252,211,77,0.3)] dark:drop-shadow-[0_0_12px_rgba(252,211,77,0.2)]",
+                        "drop-shadow-[0_0_12px_hsl(var(--primary)/0.3)] dark:drop-shadow-[0_0_12px_hsl(var(--primary)/0.2)]",
                         theme === "dark"
                             ? "text-zinc-300 group-hover:text-zinc-100"
-                            : "text-amber-500 group-hover:text-amber-600",
+                            : "text-primary group-hover:text-primary/80",
                         "group-active:scale-95"
                     )}
                 />
@@ -99,7 +99,8 @@ export default function SwitchButton({
                     <span
                         className={cn(
                             "capitalize font-medium relative",
-                            "transition-opacity duration-300 ease-out"
+                            "transition-opacity duration-300 ease-out",
+                            "hidden sm:block" // Hide text on mobile, show on desktop
                         )}
                     >
                         <span

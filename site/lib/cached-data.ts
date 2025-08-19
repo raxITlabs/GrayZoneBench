@@ -1,7 +1,9 @@
 import { bucket } from '@/lib/gcs-client';
+import { unstable_cacheTag as cacheTag } from 'next/cache';
 
 export async function getCachedMetadata() {
   'use cache';
+  cacheTag('metadata');
   
   console.log('Fetching metadata from GCS (cached)...');
   
@@ -16,6 +18,7 @@ export async function getCachedMetadata() {
 
 export async function getCachedModelData(model: string) {
   'use cache';
+  cacheTag('model-data');
   
   console.log(`Fetching model data for: ${model} (cached)`);
   
