@@ -30,6 +30,7 @@ import {
   Copy
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Pagination, usePagination, shouldShowPagination } from '@/components/ui/pagination';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
   DropdownMenu,
@@ -80,8 +81,8 @@ export function DetailedEvaluationTable({
   const columnGroups = useMemo(() => getColumnGroups(), []);
   const columnConfig = useMemo(() => getTableColumnConfig(), []);
 
-  // Prepare and filter data
-  const tableData = useMemo(() => {
+  // Prepare and filter data (all data, before pagination)
+  const allTableData = useMemo(() => {
     if (!metadata || Object.keys(modelData).length === 0) return [];
     
     let data = prepareDetailedTableData(modelData, selectedProviders);
@@ -119,6 +120,14 @@ export function DetailedEvaluationTable({
     return data;
   }, [metadata, modelData, selectedProviders, searchTerm, sortField, sortDirection]);
 
+  // Set up pagination
+  const {
+    paginatedData: tableData,
+    pagination,
+    onPageChange,
+    onPageSizeChange
+  } = usePagination(allTableData, 10);
+
   // Get visible columns based on group visibility
   const visibleColumns = useMemo(() => {
     return columnConfig.filter(col => visibleGroups[col.groupId]);
@@ -144,7 +153,8 @@ export function DetailedEvaluationTable({
     const headers = visibleColumns.map(col => col.label);
     const csvContent = [
       headers.join(','),
-      ...tableData.map(row => 
+      // Use all data, not just current page
+      ...allTableData.map(row => 
         visibleColumns.map(col => {
           const value = row[col.id];
           if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -175,7 +185,8 @@ export function DetailedEvaluationTable({
     const markdownContent = [
       `| ${headers.join(' | ')} |`,
       `|${separator}|`,
-      ...tableData.map(row => 
+      // Use all data, not just current page
+      ...allTableData.map(row => 
         `| ${visibleColumns.map(col => {
           const value = row[col.id];
           if (col.id === 'responseMode') {
@@ -266,7 +277,9 @@ export function DetailedEvaluationTable({
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Detailed Evaluation Table</h3>
         <Badge variant="outline" className="text-sm">
-          {tableData.length} models • {visibleColumns.length} columns
+          {shouldShowPagination(allTableData.length) 
+            ? `${tableData.length} of ${allTableData.length} models`
+            : `${allTableData.length} models`} • {visibleColumns.length} columns
         </Badge>
       </div>
 
@@ -467,6 +480,16 @@ export function DetailedEvaluationTable({
           </Table>
         </div>
       </div>
+      
+      {/* Pagination */}
+      {shouldShowPagination(allTableData.length) && (
+        <Pagination
+          pagination={pagination}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+          className="justify-center"
+        />
+      )}
       
       {/* Footer info */}
       <div className="text-sm text-muted-foreground text-center pt-2 space-y-1">

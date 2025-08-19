@@ -1,9 +1,9 @@
 /**
- * Simple API endpoint to serve model data without caching
+ * API endpoint to serve model data with caching via use cache directive
  */
 
 import { NextResponse } from 'next/server';
-import { bucket } from '@/lib/gcs-client';
+import { getCachedModelData } from '@/lib/cached-data';
 
 export async function GET(request: Request) {
   try {
@@ -14,15 +14,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Model parameter is required' }, { status: 400 });
     }
     
-    console.log(`API: Fetching model data for: ${model}`);
-    
-    const file = bucket.file(`latest/models/${model}.json`);
-    const [contents] = await file.download();
-    const modelData = JSON.parse(contents.toString());
-    
-    const resultsCount = Object.keys(modelData.results).length;
-    console.log(`API: Successfully fetched ${model}: ${resultsCount} results`);
-    
+    const modelData = await getCachedModelData(model);
     return NextResponse.json(modelData);
     
   } catch (error) {

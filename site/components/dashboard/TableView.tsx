@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { ProviderLogo } from '@/components/ui/provider-logo';
 import { Search, Download, ArrowUpDown, Copy, CheckCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Pagination, usePagination, shouldShowPagination } from '@/components/ui/pagination';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { prepareTableData } from '@/libs/data-transforms';
@@ -45,8 +46,8 @@ export function TableView({
   const [markdownCopied, setMarkdownCopied] = useState(false);
   const isMobile = useIsMobile();
 
-  // Prepare and filter data
-  const tableData = useMemo(() => {
+  // Prepare and filter data (all data, before pagination)
+  const allTableData = useMemo(() => {
     if (!metadata || Object.keys(modelData).length === 0) return [];
     
     let data = prepareTableData(modelData, selectedProviders);
@@ -81,6 +82,14 @@ export function TableView({
     return data;
   }, [metadata, modelData, selectedProviders, searchTerm, sortField, sortDirection]);
 
+  // Set up pagination
+  const {
+    paginatedData: tableData,
+    pagination,
+    onPageChange,
+    onPageSizeChange
+  } = usePagination(allTableData, 10);
+
   const handleSort = (field: SortField) => {
     if (field === sortField) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -94,8 +103,8 @@ export function TableView({
     const csvContent = [
       // Header
       ['Model', 'Provider', 'Safety Score', 'Helpfulness Score', 'Effectiveness', 'Response Mode', 'Total Tokens', 'Evaluations'].join(','),
-      // Data rows
-      ...tableData.map(row => [
+      // Data rows (use all data, not just current page)
+      ...allTableData.map(row => [
         row.model,
         row.provider,
         row.safety.toFixed(3),
@@ -125,7 +134,7 @@ export function TableView({
     const markdownContent = [
       `| ${headers.join(' | ')} |`,
       `|${separator}|`,
-      ...tableData.map(row => {
+      ...allTableData.map(row => {
         const badgeProps = getResponseModeBadgeProps(row.responseMode);
         return `| ${row.model} | ${row.provider} | ${formatScore(row.safety)} | ${formatScore(row.helpfulness)} | ${formatScore(row.effectiveness)} | ${badgeProps.formattedMode} | ${formatTokens(row.tokens)} | ${row.evaluations} |`;
       })
@@ -202,7 +211,9 @@ export function TableView({
         
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {tableData.length} results
+            {shouldShowPagination(allTableData.length) 
+              ? `${tableData.length} of ${allTableData.length} results`
+              : `${allTableData.length} results`}
           </span>
           {isMobile ? (
             <Tooltip>
@@ -320,6 +331,17 @@ export function TableView({
           </TableBody>
         </Table>
       </div>
+      
+      
+      {/* Pagination */}
+      {shouldShowPagination(allTableData.length) && (
+        <Pagination
+          pagination={pagination}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+          className="justify-center"
+        />
+      )}
       
       {/* Footer info */}
       <div className="text-sm text-muted-foreground text-center pt-2">
