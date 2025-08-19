@@ -33,12 +33,12 @@ export function GraphView({
 }: GraphViewProps) {
   const isMobile = useIsMobile(768);
   const { resolvedTheme } = useTheme();
+  const [providerColors, setProviderColors] = React.useState<Record<string, string>>({});
 
-  // Dynamic color system based on actual providers in the data
-  // Now reactive to theme changes - will update when user switches light/dark mode
-  const providerColorMap = useMemo(() => {
+  // Function to read CSS variables and generate colors
+  const updateProviderColors = useCallback(() => {
     if (!modelData || Object.keys(modelData).length === 0) {
-      return {};
+      return;
     }
     
     // Get unique providers from the actual model data
@@ -49,15 +49,47 @@ export function GraphView({
       ? uniqueProviders.filter(provider => selectedProviders.includes(provider))
       : uniqueProviders;
     
-    // Generate dynamic color mapping using CSS chart variables
-    // This will re-run when resolvedTheme changes (light/dark mode switch)
-    return getDynamicProviderColors(filteredProviders);
-  }, [modelData, selectedProviders, resolvedTheme]);
+    // Generate colors from CSS variables
+    const chartColors = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5'];
+    const colorMap: Record<string, string> = {};
+    const style = getComputedStyle(document.documentElement);
+    
+    filteredProviders.forEach((provider, index) => {
+      const colorVar = chartColors[index % chartColors.length];
+      const color = style.getPropertyValue(colorVar).trim();
+      colorMap[provider] = color || '#888888'; // Fallback if CSS var not found
+    });
+    
+    setProviderColors(colorMap);
+  }, [modelData, selectedProviders]);
+
+  // Use MutationObserver to watch for theme changes
+  React.useEffect(() => {
+    // Initial color load
+    updateProviderColors();
+
+    // Watch for class changes on html element (theme changes)
+    const observer = new MutationObserver(() => {
+      updateProviderColors();
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    return () => observer.disconnect();
+  }, [updateProviderColors]);
+
+  // Update when selected providers change
+  React.useEffect(() => {
+    updateProviderColors();
+  }, [selectedProviders, updateProviderColors]);
 
   // Get color for a specific provider
   const getProviderColor = useCallback((provider: string): string => {
-    return providerColorMap[provider] || '#888888'; // Fallback gray
-  }, [providerColorMap]);
+    return providerColors[provider] || '#888888'; // Fallback gray
+  }, [providerColors]);
   
   // Prepare scatter plot data with dynamic colors
   const scatterData = useMemo(() => {
