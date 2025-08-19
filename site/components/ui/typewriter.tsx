@@ -22,6 +22,7 @@ interface TypewriterTextProps {
     loopDelay?: number;
     className?: string;
     allowPause?: boolean;
+    isVisible?: boolean;
 }
 
 export function TypewriterText({
@@ -34,16 +35,17 @@ export function TypewriterText({
     loopDelay = 2000,
     className = "",
     allowPause = true,
+    isVisible = true,
 }: TypewriterTextProps) {
     const [scope, animate] = useAnimate();
     const [isPaused, setIsPaused] = useState(false);
     const [currentSequenceIndex, setCurrentSequenceIndex] = useState(0);
 
     const waitForUnpause = useCallback(async () => {
-        while (isPaused) {
+        while (isPaused || !isVisible) {
             await new Promise(resolve => setTimeout(resolve, 100));
         }
-    }, [isPaused]);
+    }, [isPaused, isVisible]);
 
     useEffect(() => {
         let isActive = true;

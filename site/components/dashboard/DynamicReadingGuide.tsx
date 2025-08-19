@@ -9,6 +9,8 @@ import { TypewriterText } from '@/components/ui/typewriter';
 import { ProviderLogo } from '@/components/ui/provider-logo';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { detectProvider } from '@/libs/data-transforms';
+import { useIntersectionObserver } from '@/hooks/use-intersection-observer';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { 
   CheckCircle, 
   XCircle, 
@@ -70,6 +72,11 @@ export function DynamicReadingGuide({
   modelData,
   metadata
 }: DynamicReadingGuideProps) {
+  const isMobile = useIsMobile();
+  const { elementRef, isVisible } = useIntersectionObserver({
+    enabled: isMobile, // Only track visibility on mobile
+    threshold: 0.3, // Component needs to be 30% visible
+  });
   
   // Generate insights based on current data and active tab
   const insights = useMemo(() => {
@@ -297,7 +304,7 @@ export function DynamicReadingGuide({
   const title = activeTab === 'graph' ? "Your Guide to the Graph" : "Your Guide to the Table";
 
   return (
-    <Card className="p-4 lg:p-4 flex-1">
+    <Card ref={elementRef} className="p-4 lg:p-4 flex-1">
       <h3 className="text-lg font-medium text-foreground mb-3">{title}</h3>
       
       {/* Dynamic conversational insights with typewriter effect and pause control */}
@@ -309,6 +316,7 @@ export function DynamicReadingGuide({
           autoLoop={insights.length > 1}
           loopDelay={2000}
           allowPause={true}
+          isVisible={isMobile ? isVisible : true}
         />
       </div>
     </Card>
