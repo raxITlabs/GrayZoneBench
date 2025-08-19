@@ -14,6 +14,7 @@ export default function ShaderBackground({ children }: ShaderBackgroundProps) {
   const [isActive, setIsActive] = useState(false)
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const [colors, setColors] = useState<string[]>([])
 
   useEffect(() => {
     setMounted(true)
@@ -37,11 +38,44 @@ export default function ShaderBackground({ children }: ShaderBackgroundProps) {
     }
   }, [])
 
-  // Theme-aware colors based on globals.css values (hardcoded for instant switching)
-  const lightColors = ["#f9f9f9", "#644a40", "#ffdfb5", "#efefef", "#d4947d"]
-  const darkColors = ["#111111", "#ffe0c2", "#393028", "#222222", "#8c7a69"]
-  
-  const colors = mounted && resolvedTheme === 'dark' ? darkColors : lightColors
+  // Function to read CSS variables
+  const updateColorsFromCSS = () => {
+    const computedStyle = getComputedStyle(document.documentElement)
+    const getColor = (varName: string) => computedStyle.getPropertyValue(varName).trim()
+    
+    const shaderColors = [
+      getColor('--background'),
+      getColor('--primary'),
+      getColor('--secondary'),
+      getColor('--muted'),
+      getColor('--chart-5') || getColor('--accent')
+    ].filter(Boolean)
+    
+    if (shaderColors.length >= 4) {
+      setColors(shaderColors)
+    }
+  }
+
+  // Use MutationObserver to watch for theme changes
+  useEffect(() => {
+    if (!mounted) return
+
+    // Initial color load
+    updateColorsFromCSS()
+
+    // Watch for class changes on html element (theme changes)
+    const observer = new MutationObserver(() => {
+      updateColorsFromCSS()
+    })
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    })
+
+    return () => observer.disconnect()
+  }, [mounted])
+
 
   return (
     <div ref={containerRef} className="min-h-screen relative overflow-hidden">
@@ -73,30 +107,32 @@ export default function ShaderBackground({ children }: ShaderBackgroundProps) {
         </defs>
       </svg>
 
-      {/* Fixed Background Shader Layers */}
-      <div className="fixed inset-0 z-0">
-        {/* Primary gradient layer */}
-        <div className="absolute inset-0 w-full h-full">
-          <MeshGradient
-            colors={colors.slice(0, 4)}
-            speed={isActive ? 0.4 : 0.2}
-            distortion={0.8}
-            swirl={0.5}
-            style={{ width: '100%', height: '100%' }}
-          />
+      {/* Fixed Background Shader Layers - Only render when colors are loaded */}
+      {colors.length >= 4 && (
+        <div className="fixed inset-0 z-0">
+          {/* Primary gradient layer */}
+          <div className="absolute inset-0 w-full h-full">
+            <MeshGradient
+              colors={colors.slice(0, 4)}
+              speed={isActive ? 0.4 : 0.2}
+              distortion={0.8}
+              swirl={0.5}
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
+          
+          {/* Secondary subtle overlay for depth */}
+          <div className="absolute inset-0 w-full h-full opacity-30">
+            <MeshGradient
+              colors={[colors[0], colors[1], colors[2], colors[0]]}
+              speed={0.15}
+              distortion={0.5}
+              swirl={0.3}
+              style={{ width: '100%', height: '100%' }}
+            />
+          </div>
         </div>
-        
-        {/* Secondary subtle overlay for depth */}
-        <div className="absolute inset-0 w-full h-full opacity-30">
-          <MeshGradient
-            colors={[colors[0], colors[1], colors[2], colors[0]]}
-            speed={0.15}
-            distortion={0.5}
-            swirl={0.3}
-            style={{ width: '100%', height: '100%' }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Content layer */}
       <div className="relative z-10">
