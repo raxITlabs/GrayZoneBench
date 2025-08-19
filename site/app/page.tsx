@@ -324,7 +324,7 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="container mx-auto px-4 py-3 md:py-6">
         <div className="flex items-start justify-between">
-          <div className="flex items-start gap-2 md:gap-3">
+          <div className={`flex gap-2 md:gap-3 ${isMobile ? 'items-center' : 'items-start'}`}>
             {mounted ? (
               <Image
                 src={resolvedTheme === 'dark' ? '/logo/logo-dark.svg' : '/logo/logo-light.svg'}
@@ -338,9 +338,11 @@ export default function DashboardPage() {
             )}
             <div>
               <h1 className="text-2xl md:text-3xl font-bold">GrayZoneBench</h1>
-              <p className="text-muted-foreground mt-1 text-base md:text-lg">
-                Evaluating how models handle prompts that in the gray zone between safe and unsafe
-              </p>
+              {!isMobile && (
+                <p className="text-muted-foreground mt-1 text-base md:text-lg">
+                  Evaluating how models handle prompts that in the gray zone between safe and unsafe
+                </p>
+              )}
             </div>
           </div>
           <div className="flex flex-row items-center gap-2 sm:gap-3">
