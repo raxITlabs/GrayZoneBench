@@ -17,7 +17,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ProviderLogo } from '@/components/ui/provider-logo';
-import { Search, Download, ArrowUpDown } from 'lucide-react';
+import { Search, Download, ArrowUpDown, Copy, CheckCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useIsMobile } from '@/hooks/use-mobile';
 import type { ModelData, BenchmarkMetadata } from '@/types/evaluation';
 import { prepareTableData } from '@/libs/data-transforms';
 import type { BenchmarkTableRow } from '@/libs/data-transforms';
@@ -40,6 +42,8 @@ export function TableView({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('effectiveness');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [markdownCopied, setMarkdownCopied] = useState(false);
+  const isMobile = useIsMobile();
 
   // Prepare and filter data
   const tableData = useMemo(() => {
@@ -86,7 +90,7 @@ export function TableView({
     }
   };
 
-  const handleExport = () => {
+  const handleExportCSV = () => {
     const csvContent = [
       // Header
       ['Model', 'Provider', 'Safety Score', 'Helpfulness Score', 'Effectiveness', 'Response Mode', 'Total Tokens', 'Evaluations'].join(','),
@@ -112,6 +116,36 @@ export function TableView({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleCopyMarkdown = async () => {
+    const headers = ['Model', 'Provider', 'Safety', 'Helpfulness', 'Effectiveness', 'Response Mode', 'Tokens', 'Evaluations'];
+    const separator = headers.map(() => '---').join('|');
+    
+    const markdownContent = [
+      `| ${headers.join(' | ')} |`,
+      `|${separator}|`,
+      ...tableData.map(row => {
+        const badgeProps = getResponseModeBadgeProps(row.responseMode);
+        return `| ${row.model} | ${row.provider} | ${formatScore(row.safety)} | ${formatScore(row.helpfulness)} | ${formatScore(row.effectiveness)} | ${badgeProps.formattedMode} | ${formatTokens(row.tokens)} | ${row.evaluations} |`;
+      })
+    ].join('\n');
+    
+    try {
+      await navigator.clipboard.writeText(markdownContent);
+      setMarkdownCopied(true);
+      setTimeout(() => setMarkdownCopied(false), 2000);
+    } catch (err) {
+      // Fallback for browsers without clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = markdownContent;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setMarkdownCopied(true);
+      setTimeout(() => setMarkdownCopied(false), 2000);
+    }
   };
 
   const formatScore = (score: number) => `${(score * 100).toFixed(1)}%`;
@@ -170,10 +204,56 @@ export function TableView({
           <span className="text-sm text-muted-foreground">
             {tableData.length} results
           </span>
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
+          {isMobile ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                  <Download className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export CSV</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button variant="outline" size="sm" onClick={handleExportCSV}>
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+          )}
+          {isMobile ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleCopyMarkdown}
+                  disabled={markdownCopied}
+                  className={markdownCopied ? 'text-chart-1 border-chart-1' : ''}
+                >
+                  {markdownCopied ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{markdownCopied ? 'Copied!' : 'Copy as Markdown'}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleCopyMarkdown}
+              disabled={markdownCopied}
+              className={markdownCopied ? 'text-chart-1 border-chart-1' : ''}
+            >
+              {markdownCopied ? (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              ) : (
+                <Copy className="w-4 h-4 mr-2" />
+              )}
+              {markdownCopied ? 'Copied!' : 'Copy Markdown'}
+            </Button>
+          )}
         </div>
       </div>
 

@@ -26,8 +26,11 @@ import {
   Settings,
   Filter,
   CheckCircle,
-  XCircle
+  XCircle,
+  Copy
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -62,6 +65,8 @@ export function DetailedEvaluationTable({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField>('effectiveness');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [markdownCopied, setMarkdownCopied] = useState(false);
+  const isMobile = useIsMobile();
   const [visibleGroups, setVisibleGroups] = useState<Record<string, boolean>>({
     core: true,
     confidence: true,
@@ -135,7 +140,7 @@ export function DetailedEvaluationTable({
     }));
   };
 
-  const handleExport = () => {
+  const handleExportCSV = () => {
     const headers = visibleColumns.map(col => col.label);
     const csvContent = [
       headers.join(','),
@@ -161,6 +166,47 @@ export function DetailedEvaluationTable({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleCopyMarkdown = async () => {
+    const headers = visibleColumns.map(col => col.label);
+    const separator = headers.map(() => '---').join('|');
+    
+    const markdownContent = [
+      `| ${headers.join(' | ')} |`,
+      `|${separator}|`,
+      ...tableData.map(row => 
+        `| ${visibleColumns.map(col => {
+          const value = row[col.id];
+          if (col.id === 'responseMode') {
+            const badgeProps = getResponseModeBadgeProps(value as string);
+            return badgeProps.formattedMode;
+          }
+          if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+          if (typeof value === 'number') {
+            if (col.type === 'percentage') return (value * 100).toFixed(1) + '%';
+            return value.toLocaleString();
+          }
+          return value?.toString() || '';
+        }).join(' | ')} |`
+      )
+    ].join('\n');
+    
+    try {
+      await navigator.clipboard.writeText(markdownContent);
+      setMarkdownCopied(true);
+      setTimeout(() => setMarkdownCopied(false), 2000);
+    } catch (err) {
+      // Fallback for browsers without clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = markdownContent;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setMarkdownCopied(true);
+      setTimeout(() => setMarkdownCopied(false), 2000);
+    }
   };
 
   // Formatting functions
@@ -265,10 +311,56 @@ export function DetailedEvaluationTable({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
+          {isMobile ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                  <Download className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Export CSV</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button variant="outline" size="sm" onClick={handleExportCSV}>
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+          )}
+          {isMobile ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleCopyMarkdown}
+                  disabled={markdownCopied}
+                  className={markdownCopied ? 'text-chart-1 border-chart-1' : ''}
+                >
+                  {markdownCopied ? (
+                    <CheckCircle className="w-4 h-4" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{markdownCopied ? 'Copied!' : 'Copy as Markdown'}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleCopyMarkdown}
+              disabled={markdownCopied}
+              className={markdownCopied ? 'text-chart-1 border-chart-1' : ''}
+            >
+              {markdownCopied ? (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              ) : (
+                <Copy className="w-4 h-4 mr-2" />
+              )}
+              {markdownCopied ? 'Copied!' : 'Copy Markdown'}
+            </Button>
+          )}
         </div>
       </div>
 
