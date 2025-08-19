@@ -103,7 +103,7 @@ export function ModelCards({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       {/* Controls - Responsive */}
       {isMobile ? (
         // Mobile Controls
@@ -175,10 +175,15 @@ export function ModelCards({
       )}
 
       {/* Cards Grid - Responsive with proper spacing */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 items-start">
-        {displayData.map((card) => (
-          <ModelCard key={card.model} data={card} isMobile={isMobile} />
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8 items-start pb-8 md:pb-12 overflow-visible">
+        {displayData.map((card, index) => {
+          // Determine if card is on the right edge based on grid columns
+          const cols = isMobile ? 1 : (window.innerWidth >= 1280 ? 4 : (window.innerWidth >= 1024 ? 3 : 2));
+          const isRightEdge = (index + 1) % cols === 0;
+          return (
+            <ModelCard key={card.model} data={card} isMobile={isMobile} isRightEdge={isRightEdge} />
+          );
+        })}
       </div>
 
       {/* Mobile Menu Sheet */}
@@ -252,7 +257,7 @@ export function ModelCards({
   );
 }
 
-function ModelCard({ data, isMobile }: { data: ModelCardData; isMobile: boolean }) {
+function ModelCard({ data, isMobile, isRightEdge = false }: { data: ModelCardData; isMobile: boolean; isRightEdge?: boolean }) {
   const formatScore = (score: number) => `${(score * 100).toFixed(1)}%`;
   const formatNumber = (num: number) => num.toLocaleString();
   const formatCurrency = (amount: number) => `$${amount.toFixed(4)}`;
@@ -348,21 +353,29 @@ function ModelCard({ data, isMobile }: { data: ModelCardData; isMobile: boolean 
   };
 
   return (
-    <Expandable
-      expandDirection="both"
-      expandBehavior="push"
-      onExpandStart={() => console.log(`Expanding ${data.model} card...`)}
-    >
-      {({ isExpanded }) => (
-        <ExpandableTrigger>
-          <ExpandableCard
-            className="w-full relative"
-            collapsedSize={{ width: 320, height: 320 }}
-            expandedSize={isMobile ? { width: 360, height: undefined } : { width: 450, height: undefined }}
-            hoverToExpand={false}
-            expandDelay={200}
-            collapseDelay={300}
-          >
+    <div className={`relative ${isRightEdge ? 'z-30' : ''}`}>
+      <Expandable
+        expandDirection="both"
+        expandBehavior="push"
+        onExpandStart={() => console.log(`Expanding ${data.model} card...`)}
+      >
+        {({ isExpanded }) => (
+          <ExpandableTrigger>
+            <div style={{
+              transformOrigin: isRightEdge ? 'top right' : 'top left',
+              marginLeft: isRightEdge && isExpanded && !isMobile ? '-80px' : '0',
+              transition: 'margin-left 0.3s ease-in-out',
+              zIndex: isExpanded ? (isMobile ? 100 : 50) : 'auto',
+              position: isExpanded ? 'relative' : 'static',
+            }}>
+              <ExpandableCard
+                className="w-full relative"
+                collapsedSize={{ width: 320, height: 320 }}
+                expandedSize={isMobile ? { width: 340, height: 750 } : { width: 400, height: 650 }}
+                hoverToExpand={false}
+                expandDelay={200}
+                collapseDelay={300}
+              >
             <ExpandableCardHeader>
               <div className="w-full">
                 <div className="flex items-center justify-between gap-2 mb-2">
@@ -422,7 +435,16 @@ function ModelCard({ data, isMobile }: { data: ModelCardData; isMobile: boolean 
               </div>
 
               {/* Expanded Content - Conversational */}
-              <ExpandableContent preset="fade" stagger staggerChildren={0.1} className="overflow-y-auto max-h-[600px]">
+              <ExpandableContent 
+                preset="fade" 
+                stagger 
+                staggerChildren={0.1} 
+                className={`overflow-y-auto ${isMobile ? 'max-h-[500px]' : 'max-h-[400px]'}`}
+                style={{
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: '#9ca3af transparent',
+                }}
+              >
                 <div className="space-y-4 text-sm">
                   {/* How We Evaluated This Model */}
                   <div>
@@ -510,9 +532,11 @@ function ModelCard({ data, isMobile }: { data: ModelCardData; isMobile: boolean 
                 </div>
               </ExpandableCardFooter>
             </ExpandableContent>
-          </ExpandableCard>
-        </ExpandableTrigger>
-      )}
-    </Expandable>
+              </ExpandableCard>
+            </div>
+          </ExpandableTrigger>
+        )}
+      </Expandable>
+    </div>
   );
 }

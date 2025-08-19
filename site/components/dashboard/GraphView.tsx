@@ -148,13 +148,15 @@ export function GraphView({
     <div className="h-[400px] md:h-[550px] p-2 md:p-4 relative flex">
       {/* Main chart area */}
       <div className="flex-1 relative">
-        {/* Quadrant background labels */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1 left-3 text-sm font-medium text-muted-foreground/60">Over-cautious</div>
-          <div className="absolute top-1 right-3 text-sm font-medium text-muted-foreground/60">Ideal Zone</div>
-          <div className="absolute bottom-3 left-3 text-sm font-medium text-muted-foreground/60">Poor Performance</div>
-          <div className="absolute bottom-3 right-3 text-sm font-medium text-muted-foreground/60">Risky but Helpful</div>
-        </div>
+        {/* Quadrant background labels - hidden on mobile */}
+        {!isMobile && (
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-1 left-3 text-sm font-medium text-muted-foreground/60">Over-cautious</div>
+            <div className="absolute top-1 right-3 text-sm font-medium text-muted-foreground/60">Ideal Zone</div>
+            <div className="absolute bottom-3 left-3 text-sm font-medium text-muted-foreground/60">Poor Performance</div>
+            <div className="absolute bottom-3 right-3 text-sm font-medium text-muted-foreground/60">Risky but Helpful</div>
+          </div>
+        )}
       
         <ResponsiveScatterPlot
           data={scatterData}

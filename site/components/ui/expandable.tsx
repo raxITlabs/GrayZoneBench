@@ -412,7 +412,7 @@ const ExpandableCard = React.forwardRef<HTMLDivElement, ExpandableCardProps>(
     return (
       <motion.div
         ref={ref}
-        className={cn("cursor-pointer", className)}
+        className={cn("cursor-pointer relative", className)}
         style={{
           // Set width and height based on expansion direction
           width:
@@ -421,6 +421,12 @@ const ExpandableCard = React.forwardRef<HTMLDivElement, ExpandableCardProps>(
             expandDirection === "horizontal"
               ? collapsedSize.height
               : smoothHeight,
+          // Add z-index elevation when expanded - higher value for better layering
+          zIndex: isExpanded ? 50 : 1,
+          // Position relative for z-index to work
+          position: "relative",
+          // Isolation to create new stacking context
+          isolation: isExpanded ? "isolate" : "auto",
         }}
         transition={springConfig}
         onHoverStart={handleHover}
