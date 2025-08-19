@@ -98,7 +98,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen">
         {/* Header Skeleton */}
         <header className="container mx-auto px-4 py-3 md:py-6">
           <div className="flex items-start justify-between">
@@ -315,7 +315,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       {/* Header */}
       <header className="container mx-auto px-4 py-3 md:py-6">
         <div className="flex items-start justify-between">
