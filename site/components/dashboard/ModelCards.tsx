@@ -395,7 +395,7 @@ function ModelCard({ data, isMobile, isRightEdge = false }: { data: ModelCardDat
                     </div>
                   </div>
                 </div>
-                <h3 className="font-semibold text-lg text-foreground leading-tight">
+                <h3 className="font-semibold text-lg text-foreground leading-tight truncate">
                   {data.model}
                 </h3>
               </div>
