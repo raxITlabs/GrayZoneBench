@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "raxit AI - GrayZoneBench Results",
+  title: "raxIT AI - GrayZoneBench Results",
   description: "AI Safety Evaluation Dashboard - Three-tier evaluation of model responses in gray zone scenarios",
 };
 
