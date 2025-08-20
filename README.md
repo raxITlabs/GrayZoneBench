@@ -1,13 +1,13 @@
 # GrayZoneBench
 
-[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![UV](https://img.shields.io/badge/uv-Package%20Manager-green)](https://github.com/astral-sh/uv)
-[![Dataset](https://img.shields.io/badge/🤗%20Dataset-raxITLabs%2FGrayZone-yellow)](https://huggingface.co/datasets/raxITLabs/GrayZone)
-[![Live Dashboard](https://img.shields.io/badge/🌐%20Live%20Dashboard-bench.raxit.ai-orange.svg)](https://bench.raxit.ai)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-available-brightgreen.svg)](docs/)
-[![Code style: Python](https://img.shields.io/badge/code%20style-python-blue.svg)](https://www.python.org/dev/peps/pep-0008/)
-[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/raxITlabs/GrayZoneBench)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-644a40?style=flat&labelColor=ffe0c2&color=644a40&logo=python&logoColor=000000)](https://www.python.org/downloads/)
+[![UV](https://img.shields.io/badge/uv-Package%20Manager-644a40?style=flat&labelColor=ffe0c2&color=644a40&logoColor=000000)](https://github.com/astral-sh/uv)
+[![Dataset](https://img.shields.io/badge/🤗%20Dataset-raxITLabs%2FGrayZone-644a40?style=flat&labelColor=ffe0c2&color=644a40&logoColor=000000)](https://huggingface.co/datasets/raxITLabs/GrayZone)
+[![Live Dashboard](https://img.shields.io/badge/🌐%20Live%20Dashboard-bench.raxit.ai-644a40?style=flat&labelColor=ffe0c2&color=644a40&logoColor=000000)](https://bench.raxit.ai)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-644a40?style=flat&labelColor=ffe0c2&color=644a40&logoColor=000000)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-available-644a40?style=flat&labelColor=ffe0c2&color=644a40&logoColor=000000)](docs/)
+[![Code style: Python](https://img.shields.io/badge/code%20style-python-644a40?style=flat&labelColor=ffe0c2&color=644a40&logoColor=000000)](https://www.python.org/dev/peps/pep-0008/)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-644a40?style=flat&labelColor=ffe0c2&color=644a40&logoColor=000000)](https://github.com/raxITlabs/GrayZoneBench)
 
 AI safety benchmark evaluating how models navigate the "gray zone" between helpful and harmful responses using OpenAI's safe-completion paradigm. Uses the enhanced [`raxITLabs/GrayZone`](https://huggingface.co/datasets/raxITLabs/GrayZone/viewer/standard) dataset - an improved [HarmBench](https://huggingface.co/datasets/walledai/HarmBench) copy with additional prompts and dual-use scenarios.
 
